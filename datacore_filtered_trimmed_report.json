@@ -1,0 +1,25 @@
+{
+  "source": "datacore_filtered.csv",
+  "rows": 5122,
+  "kept_columns": [
+    "nitrogen",
+    "potassium",
+    "phosphorus",
+    "temperature",
+    "humidity",
+    "moisture",
+    "crop",
+    "phosphorus"
+  ],
+  "requested_keep": [
+    "nitrogen",
+    "potassium",
+    "phosphorus",
+    "temperature",
+    "humidity",
+    "moisture",
+    "crop",
+    "ph"
+  ],
+  "missing_requested": []
+}

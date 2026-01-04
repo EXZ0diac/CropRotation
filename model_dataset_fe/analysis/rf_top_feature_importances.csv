@@ -1,0 +1,21 @@
+feature,importance
+temperature_log1p humidity_log1p,0.054951862516594695
+temperature_log1p moisture_log1p,0.054059138553671636
+humidity_log1p,0.052823508405969666
+humidity_log1p moisture_log1p,0.052737290992247346
+nitrogen_log1p moisture_log1p,0.051266479687343304
+humidity_log1p^2,0.05037912788765029
+temperature_log1p^2,0.048921409571643884
+nitrogen_log1p temperature_log1p,0.04830975777764485
+temperature_log1p,0.04770292416966329
+nitrogen_log1p humidity_log1p,0.0467880259146591
+moisture_log1p^2,0.04558104085934134
+moisture_log1p,0.045042785146762604
+phosphorus_log1p temperature_log1p,0.04204042414639412
+phosphorus_log1p moisture_log1p,0.04198425088595311
+phosphorus_log1p humidity_log1p,0.04075174163849502
+nitrogen_log1p phosphorus_log1p,0.03712253545342303
+potassium_log1p temperature_log1p,0.02823574743348113
+potassium_log1p moisture_log1p,0.02797935538649429
+potassium_log1p humidity_log1p,0.027664691542820093
+nitrogen_log1p potassium_log1p,0.026339547261141568

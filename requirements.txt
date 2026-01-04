@@ -1,0 +1,16 @@
+joblib
+numpy
+tensorflow
+python-telegram-bot
+pyngrok
+python-dotenv
+requests
+fastapi
+uvicorn[standard]
+sqlalchemy
+pyserial
+openpyxl
+pandas
+seaborn
+matplotlib
+tabulate

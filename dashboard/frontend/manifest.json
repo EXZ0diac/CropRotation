@@ -1,0 +1,11 @@
+{
+  "name": "Soil Sensor Dashboard",
+  "short_name": "SoilDash",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b69ff",
+  "icons": [
+    {"src":"/icon-192.png","sizes":"192x192","type":"image/png"}
+  ]
+}

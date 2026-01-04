@@ -1,0 +1,24 @@
+body{font-family:Segoe UI,Roboto,Arial,system-ui,-apple-system,Segoe UI Emoji,Helvetica,Arial;background:#f6f8fa;color:#0b1a2b;margin:0;padding:0}
+header{background:#0b69ff;color:white;padding:16px 20px}
+main{padding:20px;max-width:1200px;margin:0 auto}
+#values{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:18px}
+.card{background:white;border-radius:10px;padding:14px 16px;box-shadow:0 4px 10px rgba(11,26,43,0.06);min-width:140px;flex:0 1 140px;text-align:center}
+.chart-card{background:white;border-radius:10px;padding:12px;box-shadow:0 4px 10px rgba(11,26,43,0.06);display:flex;flex-direction:column}
+.chart-card h3{margin:0 0 8px 0;font-size:15px;color:#222}
+
+/* grid for charts: responsive small multiples */
+#charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:14px}
+/* give charts a comfortable reading height by default */
+#charts-grid canvas{width:100% !important;height:320px !important}
+
+/* make latest values cards look tidy */
+.value-label{font-size:13px;color:#666;margin-bottom:6px}
+.value-number{font-size:20px;font-weight:700;color:#111}
+
+/* responsive tweaks */
+@media (max-width:480px){
+	#charts-grid canvas{height:220px !important}
+	.card{flex:1 1 45%}
+}
+
+

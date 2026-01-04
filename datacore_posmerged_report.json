@@ -1,0 +1,31 @@
+{
+  "main_rows": 8000,
+  "aux_rows": 8000,
+  "copied_columns": {
+    "ph": {
+      "from_aux": false
+    },
+    "organic_carbon": {
+      "from_aux": false
+    },
+    "soil_type": {
+      "from_aux": true,
+      "before_missing": null,
+      "after_missing": 0
+    },
+    "fertilizer_name": {
+      "from_aux": true,
+      "before_missing": null,
+      "after_missing": 0
+    },
+    "region": {
+      "from_aux": false
+    },
+    "date": {
+      "from_aux": false
+    },
+    "ec": {
+      "from_aux": false
+    }
+  }
+}

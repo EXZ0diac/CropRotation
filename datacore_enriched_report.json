@@ -1,0 +1,15 @@
+{
+  "n_original_rows": 8000,
+  "n_core_rows": 8000,
+  "n_merged_rows": 8000,
+  "added_columns_found": [
+    "soil_type",
+    "fertilizer_name"
+  ],
+  "notes": [],
+  "enriched_csv": "datacore_enriched.csv",
+  "missing_values": {
+    "soil_type_na_count": 0,
+    "fertilizer_name_na_count": 0
+  }
+}

@@ -1,0 +1,3 @@
+RF accuracy: 0.396875
+Classes: Cash_Oil,Cereals,Pulses,Sugarcane
+XGB accuracy: 0.369375

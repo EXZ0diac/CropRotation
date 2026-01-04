@@ -1,0 +1,37 @@
+{
+  "rows": 5122,
+  "n_features": 7,
+  "n_classes": 7,
+  "majority_class_accuracy": 0.14896524795001953,
+  "class_distribution": {
+    "Sugarcane": 763,
+    "Maize": 753,
+    "Wheat": 747,
+    "Ground Nuts": 732,
+    "Millets": 718,
+    "Paddy": 706,
+    "Barley": 703
+  },
+  "top_features": [
+    {
+      "feature": "humidity",
+      "mutual_info": 0.018707067097317065
+    },
+    {
+      "feature": "temperature",
+      "mutual_info": 0.008241130890560555
+    },
+    {
+      "feature": "phosphorus.1",
+      "mutual_info": 0.006216926014150026
+    },
+    {
+      "feature": "moisture",
+      "mutual_info": 0.0043596050499390415
+    },
+    {
+      "feature": "nitrogen",
+      "mutual_info": 0.001791260464792277
+    }
+  ]
+}

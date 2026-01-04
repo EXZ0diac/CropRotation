@@ -1,0 +1,22 @@
+{
+  "rf": {
+    "accuracy": 0.084375,
+    "best_params": {
+      "n_estimators": 100,
+      "min_samples_split": 10,
+      "min_samples_leaf": 2,
+      "max_depth": 20,
+      "class_weight": "balanced"
+    }
+  },
+  "xgb": {
+    "accuracy": 0.093125,
+    "best_params": {
+      "subsample": 1.0,
+      "n_estimators": 100,
+      "max_depth": 10,
+      "learning_rate": 0.1,
+      "colsample_bytree": 1.0
+    }
+  }
+}

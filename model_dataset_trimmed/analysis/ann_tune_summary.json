@@ -1,0 +1,13 @@
+{
+  "best_acc": 0.15219512581825256,
+  "best_cfg": {
+    "layer1": 128,
+    "layer2": 0,
+    "layer3": 16,
+    "dropout1": 0.3,
+    "dropout2": 0.2,
+    "lr": 0.001,
+    "batch_size": 64
+  },
+  "num_trials": 12
+}

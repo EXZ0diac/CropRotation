@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+  <!-- API base: leave unset to use the page origin, or set via runtime if needed -->
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Soil Sensor Dashboard</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Soil Sensor Dashboard</h1>
+    </header>
+    <main>
+      <section id="latest">
+        <h2>Latest Readings</h2>
+        <div id="values"></div>
+      </section>
+
+      <section id="charts">
+        <h2>History (last 100)</h2>
+        <div id="charts-grid"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+  </html>

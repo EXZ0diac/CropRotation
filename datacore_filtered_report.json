@@ -1,0 +1,13 @@
+{
+  "source": "datacore_prepared.csv",
+  "rows_before": 8000,
+  "rows_after": 5122,
+  "removed_rows": 2878,
+  "removals": [
+    "oil seeds",
+    "pulses",
+    "tobacco",
+    "cotton"
+  ],
+  "target_column": "crop"
+}
