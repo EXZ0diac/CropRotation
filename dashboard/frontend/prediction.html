@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chili/Eggplant Prediction History</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body class="prediction-page">
+    <header>
+      <h1>Soil Sensor Dashboard</h1>
+      <p class="site-tagline">Agriculture intelligence for soil, crops, and decisions. See Chili and Eggplant predictions with confidence percentages at a glance.</p>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link active" href="/prediction.html">Prediction</a>
+        <a class="nav-link" href="/commands.html">Commands</a>
+        <a class="nav-link" href="/history.html">History</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-intro-card">
+        <div class="section-heading-row">
+          <h2>Chili/Eggplant Prediction History</h2>
+          <div class="section-count" id="prediction-count">0 predictions</div>
+        </div>
+        <p class="page-intro-text">This page automatically predicts the latest 25 readings using the chili_eggplant_model.py result. No manual input is needed.</p>
+        <div class="page-link-row">
+          <a class="page-link-button" href="/">Home</a>
+          <a class="page-link-button page-link-button-primary" href="/history.html">History</a>
+        </div>
+      </section>
+
+      <section class="prediction-results-shell">
+        <div class="section-heading-row">
+          <h2>Last 25 Prediction Results</h2>
+        </div>
+        <div class="table-wrap prediction-table-wrap">
+          <table id="prediction-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Nitrogen</th>
+                <th>Phosphorus</th>
+                <th>Potassium</th>
+                <th>pH</th>
+                <th>Humidity</th>
+                <th>Temperature</th>
+                <th>Prediction Result</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="prediction-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/prediction.js"></script>
+  </body>
+</html>

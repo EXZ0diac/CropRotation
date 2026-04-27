@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Soil Sensor History</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <header>
+      <h1>Soil Sensor Dashboard</h1>
+      <p class="site-tagline">Agriculture intelligence for soil, crops, and decisions. Review past sensor signals and verify field behavior over time.</p>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/prediction.html">Prediction</a>
+        <a class="nav-link" href="/commands.html">Commands</a>
+        <a class="nav-link active" href="/history.html">History</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="history-table-section">
+        <h2>Last 50 Readings</h2>
+        <div class="table-wrap">
+          <table id="history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Nitrogen</th>
+                <th>Phosphorus</th>
+                <th>Potassium</th>
+                <th>pH</th>
+                <th>Electrical Conductivity</th>
+                <th>Humidity</th>
+                <th>Temperature</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "accuracy": 0.9505516416323275,
+  "classes": [
+    "Chili",
+    "Eggplant"
+  ],
+  "n_train": 35105,
+  "n_val": 7522,
+  "n_test": 7523,
+  "feature_names": [
+    "Nitrogen",
+    "Phosphorus",
+    "Potassium",
+    "pH",
+    "Humidity",
+    "Temperature"
+  ],
+  "final_model_keras": "model/chili_eggplant_model\\chili_eggplant_model.keras",
+  "final_model_h5": "model/chili_eggplant_model\\chili_eggplant_model.h5"
+}

@@ -969,23 +969,30 @@ if __name__ == "__main__":
             print("ℹ️ Detected Raspberry Pi environment — disabling webhook (forcing USE_WEBHOOK=0). The bot will use local polling and the dashboard should be reachable via the Pi's IP.")
             use_webhook = '0'
 
-    future = asyncio.run_coroutine_threadsafe(application.initialize(), bg_loop)
-    future.result()
+    if use_webhook == '1':
+        # Webhook mode: initialize/start the async app and serve Flask endpoint.
+        future = asyncio.run_coroutine_threadsafe(application.initialize(), bg_loop)
+        future.result()
+        asyncio.run_coroutine_threadsafe(application.start(), bg_loop).result()
 
-    try:
-        if use_webhook == '1':
-            # Only set a webhook when explicitly requested (e.g., on the Pi).
+        try:
+            # Only set a webhook when explicitly requested.
             setup_webhook()
-        else:
-            # Ensure no webhook is active so polling (getUpdates) can be used
-            # when running the bot locally on a laptop.
-            try:
-                asyncio.run_coroutine_threadsafe(application.bot.delete_webhook(drop_pending_updates=True), bg_loop).result()
-                print("🤖 Existing webhook (if any) deleted; using polling mode.")
-            except Exception as e:
-                print(f"[WARN] Could not delete existing webhook: {e}")
-    except Exception as e:
-        print(f"[ERROR] Webhook setup/delete failed: {e}")
+        except Exception as e:
+            print(f"[ERROR] Webhook setup failed: {e}")
 
-    print("🤖 Telegram bot initialized and ready.")
-    app.run(host="0.0.0.0", port=5000)
+        print("🤖 Telegram bot initialized in webhook mode.")
+        app.run(host="0.0.0.0", port=5000)
+    else:
+        # Polling mode: consume updates directly from Telegram.
+        try:
+            requests.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true",
+                timeout=10,
+            )
+            print("🤖 Existing webhook (if any) deleted; using polling mode.")
+        except Exception as e:
+            print(f"[WARN] Could not delete existing webhook: {e}")
+
+        print("🤖 Telegram bot initialized in polling mode.")
+        application.run_polling(drop_pending_updates=True)

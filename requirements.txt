@@ -1,6 +1,8 @@
 joblib
 numpy
-tensorflow
+# TensorFlow stable wheels are typically unavailable on very new Python versions.
+tensorflow; python_version < "3.13"python
+tf-nightly; python_version >= "3.13"
 python-telegram-bot
 pyngrok
 python-dotenv
@@ -10,6 +12,7 @@ uvicorn[standard]
 sqlalchemy
 pyserial
 openpyxl
+scikit-learn
 pandas
 seaborn
 matplotlib

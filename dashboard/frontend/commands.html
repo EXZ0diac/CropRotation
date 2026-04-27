@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agriculture AI Commands</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <header>
+      <h1>Soil Sensor Dashboard</h1>
+      <p class="site-tagline">Agriculture intelligence for soil, crops, and decisions. Manage field data, compare predictions, and keep the workflow in one place.</p>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/prediction.html">Prediction</a>
+        <a class="nav-link active" href="/commands.html">Commands</a>
+        <a class="nav-link" href="/history.html">History</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-intro-card">
+        <div class="section-heading-row">
+          <h2>Farm Command Center</h2>
+        </div>
+        <p class="page-intro-text">Execute farm workflows directly from the web interface. This layout is designed for fast scanning, field work, and AI-assisted decisions.</p>
+        <div class="page-link-row">
+          <a class="page-link-button" href="/prediction.html">Prediction</a>
+          <a class="page-link-button page-link-button-primary" href="/history.html">History</a>
+        </div>
+      </section>
+
+      <!-- Status indicator -->
+      <div id="status-message" style="display: none; padding: 12px; margin-bottom: 16px; border-radius: 4px;"></div>
+
+      <!-- Tab Navigation -->
+      <div class="command-tabs">
+        <button class="command-tab-btn active" data-tab="soil">Soil Management</button>
+        <button class="command-tab-btn" data-tab="test">Test Crops</button>
+        <button class="command-tab-btn" data-tab="plants">Plant History</button>
+        <button class="command-tab-btn" data-tab="status">Sensor Status</button>
+      </div>
+
+      <!-- Tab 1: Soil Management -->
+      <div id="soil-tab" class="command-tab-content active">
+        <h3>Soil Management</h3>
+        
+        <div class="command-form">
+          <h4>Add New Soil Entry</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="soil-label">Label (Optional)</label>
+              <input type="text" id="soil-label" placeholder="e.g., Plot A, Field 1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="soil-n">Nitrogen (N)</label>
+              <input type="number" id="soil-n" step="0.1" placeholder="80">
+            </div>
+            <div class="form-group">
+              <label for="soil-p">Phosphorus (P)</label>
+              <input type="number" id="soil-p" step="0.1" placeholder="45">
+            </div>
+            <div class="form-group">
+              <label for="soil-k">Potassium (K)</label>
+              <input type="number" id="soil-k" step="0.1" placeholder="40">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="soil-ph">pH</label>
+              <input type="number" id="soil-ph" step="0.1" min="0" max="14" placeholder="6.5">
+            </div>
+            <div class="form-group">
+              <label for="soil-moisture">Moisture (%)</label>
+              <input type="number" id="soil-moisture" step="0.1" min="0" max="100" placeholder="60">
+            </div>
+            <div class="form-group">
+              <label for="soil-temperature">Temperature (°C)</label>
+              <input type="number" id="soil-temperature" step="0.1" placeholder="27">
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="addSoilEntry()">Save Soil Entry</button>
+            <button class="btn-secondary" onclick="clearSoilForm()">Clear</button>
+          </div>
+          <div id="add-soil-result"></div>
+        </div>
+
+        <div>
+          <h4>Saved Soil Entries</h4>
+          <div id="soil-list" class="soil-list">
+            <p style="color: #999;">Loading soil entries...</p>
+          </div>
+          <button class="btn-secondary" onclick="refreshSoilList()">Refresh List</button>
+        </div>
+
+        <div class="command-form" style="margin-top: 20px;">
+          <h4>Check Crop Suitability</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="check-soil-id">Select Soil Entry</label>
+              <select id="check-soil-id">
+                <option value="">Loading...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="check-crop">Crop Name</label>
+              <select id="check-crop">
+                <option value="">-- Select a crop --</option>
+                <option value="Chili">Chili</option>
+                <option value="Cucumber">Cucumber</option>
+                <option value="Groundnut">Groundnut</option>
+                <option value="Maize">Maize</option>
+                <option value="Paddy">Paddy</option>
+                <option value="Spinach">Spinach</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="checkSuitability()">Check Suitability</button>
+          </div>
+          <div id="suitability-result"></div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Test Crops -->
+      <div id="test-tab" class="command-tab-content">
+        <h3>Test Multiple Crops</h3>
+        
+        <div class="command-form">
+          <h4>Add Crop Test</h4>
+          <p style="font-size: 13px; color: #666; margin-top: 0;">Enter crop name and soil values to test</p>
+          <div class="form-group">
+            <label for="test-crop-name">Crop Name</label>
+            <input type="text" id="test-crop-name" placeholder="e.g., Chili, Maize">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nitrogen</label>
+              <input type="number" id="test-n" step="0.1" placeholder="80">
+            </div>
+            <div class="form-group">
+              <label>Phosphorus</label>
+              <input type="number" id="test-p" step="0.1" placeholder="45">
+            </div>
+            <div class="form-group">
+              <label>Potassium</label>
+              <input type="number" id="test-k" step="0.1" placeholder="40">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>pH</label>
+              <input type="number" id="test-ph" step="0.1" placeholder="6.5">
+            </div>
+            <div class="form-group">
+              <label>Moisture (%)</label>
+              <input type="number" id="test-moisture" step="0.1" placeholder="60">
+            </div>
+            <div class="form-group">
+              <label>Temperature (°C)</label>
+              <input type="number" id="test-temperature" step="0.1" placeholder="27">
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="addCropTest()">Add Crop</button>
+            <button class="btn-secondary" onclick="clearTestForm()">Clear</button>
+          </div>
+        </div>
+
+        <div>
+          <h4>Crops to Test</h4>
+          <div id="test-crops-queue" style="margin-bottom: 16px;"></div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="runAllTests()">Test All Crops</button>
+            <button class="btn-secondary" onclick="clearTestQueue()">Clear Queue</button>
+          </div>
+        </div>
+
+        <div id="test-results"></div>
+      </div>
+
+      <!-- Tab 3: Plant History -->
+      <div id="plants-tab" class="command-tab-content">
+        <h3>Plant History</h3>
+        
+        <div id="plants-current" style="margin-bottom: 20px;"></div>
+
+        <div class="command-form">
+          <h4>Set Previous Plant</h4>
+          <div class="form-group">
+            <label for="prev-plant">Plant Name</label>
+            <input type="text" id="prev-plant" placeholder="e.g., Paddy">
+          </div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="setPreviousPlant()">Set Previous Plant</button>
+          </div>
+          <div id="prev-plant-result"></div>
+        </div>
+
+        <div class="command-form">
+          <h4>Set Next Plant</h4>
+          <div class="form-group">
+            <label for="next-plant">Plant Name</label>
+            <input type="text" id="next-plant" placeholder="e.g., Maize">
+          </div>
+          <div class="btn-group">
+            <button class="btn-primary" onclick="setNextPlant()">Set Next Plant</button>
+          </div>
+          <div id="next-plant-result"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Sensor Status -->
+      <div id="status-tab" class="command-tab-content">
+        <h3>Sensor Status</h3>
+        
+        <div id="sensor-status-result"></div>
+        <div class="btn-group" style="margin-top: 20px;">
+          <button class="btn-primary" onclick="getSensorStatus()">Refresh Status</button>
+        </div>
+      </div>
+    </main>
+
+    <script src="/commands.js"></script>
+  </body>
+</html>
+

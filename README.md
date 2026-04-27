@@ -43,9 +43,57 @@ Important environment variables used by `run_all.py`:
 - `SERIAL_PORT` — serial device for the sensor bridge.
 - `SIMULATE_SENSOR` — if set to `1` or `--simulate` is passed, the simulated sensor runs instead of serial bridge.
 - `FORCE_START_BOT_ON_PI` — if running on a Raspberry Pi, `run_all.py` will skip starting the bot to avoid conflicts. Set this to `1` to override and force the bot to start on Pi.
+- `ENABLE_PUBLIC_DASHBOARD` — set to `1` to expose the dashboard over the internet.
+- `PUBLIC_TUNNEL_PROVIDER` — choose `cloudflare` or `ngrok` (default: `cloudflare`).
+- `CLOUDFLARED_BIN` — optional full path to `cloudflared` if not in PATH.
+- `NGROK_AUTHTOKEN` — optional ngrok token for better reliability and limits (only for ngrok provider).
 
 Raspberry Pi auto-skip behavior:
 - `run_all.py` includes a best-effort Pi detector. On Pi it will automatically skip starting the dashboard's Telegram bot unless `FORCE_START_BOT_ON_PI=1`.
+
+Public internet access (Pi in garden, monitor from home):
+
+You can expose the dashboard from the Raspberry Pi even when your phone/laptop is on a different network.
+
+Option A (Cloudflare, one-time command):
+
+```bash
+python3 run_all.py --public
+```
+
+Option B (Cloudflare, explicit provider):
+
+```bash
+python3 run_all.py --public --public-provider cloudflare
+```
+
+Option C (via env):
+
+```bash
+export ENABLE_PUBLIC_DASHBOARD=1
+export PUBLIC_TUNNEL_PROVIDER=cloudflare
+python3 run_all.py
+```
+
+Option D (ngrok provider):
+
+```bash
+export ENABLE_PUBLIC_DASHBOARD=1
+export PUBLIC_TUNNEL_PROVIDER=ngrok
+export NGROK_AUTHTOKEN=<your-ngrok-token>   # optional but recommended
+python3 run_all.py
+```
+
+When started, `run_all.py` prints a `Public dashboard URL` that you can open from anywhere.
+Keep `DASHBOARD_API_KEY` private before sharing the link.
+
+Cloudflare install note on Raspberry Pi:
+
+Install `cloudflared` from Cloudflare docs for your distro/arch, then verify:
+
+```bash
+cloudflared --version
+```
 
 ## `main.py` — usage and env
 
