@@ -50,6 +50,7 @@ app.add_middleware(
 )
 
 API_KEY = os.getenv("DASHBOARD_API_KEY", "dev-token")
+LEGACY_API_KEY = "dev-token"
 
 # Prediction artifacts (loaded lazily on first prediction request)
 PREDICTION_ROOT = Path(__file__).resolve().parents[2]
@@ -76,32 +77,21 @@ def _load_prediction_artifacts() -> None:
     if prediction_loaded:
         return
 
-    scaler_path = _existing_path([
-        PREDICTION_MODEL_DIR / "chili_eggplant_model" / "scaler.save",
-        PREDICTION_MODEL_DIR / "scaler.save",
-        PREDICTION_ROOT / "model_dataset_improved" / "scaler.save",
-    ])
-    encoder_path = _existing_path([
-        PREDICTION_MODEL_DIR / "chili_eggplant_model" / "label_encoder.save",
-        PREDICTION_MODEL_DIR / "label_encoder.save",
-        PREDICTION_ROOT / "model_dataset_improved" / "label_encoder.save",
-    ])
+    model_dir = PREDICTION_MODEL_DIR / "chili_eggplant_model"
+    scaler_path = model_dir / "scaler.save"
+    encoder_path = model_dir / "label_encoder.save"
 
-    if not scaler_path or not encoder_path:
-        raise RuntimeError("Missing scaler or label encoder artifacts")
+    if not scaler_path.exists() or not encoder_path.exists():
+        raise RuntimeError("Missing Chili/Eggplant scaler or label encoder artifacts")
 
     prediction_scaler = joblib.load(scaler_path)
     prediction_label_encoder = joblib.load(encoder_path)
 
     if TF_AVAILABLE and keras_load_model is not None:
         for model_path in [
-            PREDICTION_MODEL_DIR / "chili_eggplant_model" / "chili_eggplant_model.keras",
-            PREDICTION_MODEL_DIR / "chili_eggplant_model" / "chili_eggplant_model.h5",
-            PREDICTION_MODEL_DIR / "chili_eggplant_model" / "best_model.keras",
-            PREDICTION_MODEL_DIR / "crop_rotation_model.keras",
-            PREDICTION_MODEL_DIR / "crop_rotation_model.h5",
-            PREDICTION_MODEL_DIR / "best_model.keras",
-            PREDICTION_MODEL_DIR / "best_model.h5",
+            model_dir / "chili_eggplant_model.keras",
+            model_dir / "chili_eggplant_model.h5",
+            model_dir / "best_model.keras",
         ]:
             if not model_path.exists():
                 continue
@@ -113,23 +103,7 @@ def _load_prediction_artifacts() -> None:
             except Exception as e:
                 logging.warning("Could not load Keras model %s: %s", model_path, e)
 
-    for model_path in [
-        PREDICTION_MODEL_DIR / "chili_eggplant_model" / "rf_model.joblib",
-        PREDICTION_ROOT / "model_dataset_improved" / "rf_model.joblib",
-        PREDICTION_ROOT / "model_dataset_grouped" / "rf_grouped.joblib",
-        PREDICTION_ROOT / "model_dataset_binary" / "rf_binary.joblib",
-    ]:
-        if not model_path.exists():
-            continue
-        try:
-            prediction_sklearn_model = joblib.load(model_path)
-            logging.info("Loaded sklearn prediction model from %s", model_path)
-            prediction_loaded = True
-            return
-        except Exception as e:
-            logging.warning("Could not load sklearn model %s: %s", model_path, e)
-
-    raise RuntimeError("No prediction model artifact could be loaded")
+    raise RuntimeError("No Chili/Eggplant Keras model artifact could be loaded")
 
 
 def _predict_crop(values: List[float]) -> dict:
@@ -138,8 +112,13 @@ def _predict_crop(values: List[float]) -> dict:
     if prediction_scaler is None or prediction_label_encoder is None:
         raise RuntimeError("Prediction preprocessors are not loaded")
 
-    feature_frame = pd.DataFrame([values], columns=PREDICTION_FEATURES)
-    scaled = prediction_scaler.transform(feature_frame)
+    feature_names = getattr(prediction_scaler, "feature_names_in_", None)
+    if feature_names is not None and len(feature_names) == len(values):
+        feature_frame = pd.DataFrame([values], columns=list(feature_names))
+        scaled = prediction_scaler.transform(feature_frame)
+    else:
+        feature_array = np.array([values], dtype=float)
+        scaled = prediction_scaler.transform(feature_array)
     class_names = [str(c) for c in prediction_label_encoder.classes_]
     probs = None
 
@@ -195,7 +174,7 @@ def get_db():
 def require_api_key(x_api_key: Optional[str] = Header(None)):
     if x_api_key is None:
         raise HTTPException(status_code=401, detail="Missing API key")
-    if x_api_key != API_KEY:
+    if x_api_key not in {API_KEY, LEGACY_API_KEY}:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 

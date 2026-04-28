@@ -23,7 +23,8 @@ import subprocess
 import multiprocessing
 import re
 from dotenv import load_dotenv
-import requests
+from urllib.error import URLError, HTTPError
+from urllib.request import urlopen
 
 
 def start_ngrok_tunnel(port):
@@ -185,11 +186,12 @@ def wait_for_api_ready(host, port, timeout_seconds=30):
     
     while time.time() - start_time < timeout_seconds:
         try:
-            response = requests.get(url, timeout=2)
-            if response.status_code < 500:  # Any response that's not 5xx indicates server is up
-                print(f"✓ API is ready (status: {response.status_code})")
+            with urlopen(url, timeout=2) as response:
+                status_code = getattr(response, "status", 200)
+            if status_code < 500:  # Any response that's not 5xx indicates server is up
+                print(f"✓ API is ready (status: {status_code})")
                 return True
-        except (requests.ConnectionError, requests.Timeout, requests.RequestException):
+        except (HTTPError, URLError, TimeoutError, OSError):
             # Server not ready yet
             pass
         
