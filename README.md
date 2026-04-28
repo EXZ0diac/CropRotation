@@ -12,21 +12,30 @@ CropRotationAI is a toolkit for reading soil and sensor data, running a dashboar
 - A virtual environment
 - Dependencies from `requirements.txt`
 
+## WSL First
+This project is used mostly from WSL, so the commands below are written with that in mind.
+
+Recommended WSL workflow:
+- Open the repo from your WSL shell.
+- Create and activate the virtual environment inside WSL.
+- Run `run_all.py` from WSL for the dashboard, backend, and sensor bridge.
+- Use PowerShell only when you specifically need Windows-native tools or paths.
+
 ## Setup
+
+WSL / Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
 Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Linux or macOS:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -61,6 +70,8 @@ python run_all.py --public
 python run_all.py --public --public-provider ngrok
 python run_all.py --env dashboard/.env
 ```
+
+When running in WSL, prefer the `python3` command and Linux paths. If you need to access Windows-mounted files, use the `/mnt/c/...` path style.
 
 ## Dashboard Architecture
 
@@ -101,6 +112,8 @@ Start the dashboard and sensor bridge:
 ```bash
 python run_all.py
 ```
+
+From WSL, this is the preferred way to run the project.
 
 Use the simulated sensor:
 
