@@ -1,29 +1,53 @@
 # CropRotationAI
 
-CropRotationAI is a toolkit for reading soil and sensor data, running a dashboard, and training or serving machine-learning models for crop-rotation and crop-prediction workflows.
+CropRotationAI is a soil and crop workflow project that brings together sensor ingestion, a FastAPI dashboard backend, a browser frontend, and machine-learning utilities for crop prediction and crop-rotation analysis.
 
-## Quick Summary
-- `run_all.py` starts the dashboard backend, serves the frontend, and launches the sensor bridge or simulator.
-- `main.py` and the training scripts support model-related tasks and artifact generation.
-- `model_training.py` and the other `train_*.py` scripts generate model artifacts saved in `model/`.
+The project is designed to run well from WSL on a Windows machine, with the main orchestration happening through `run_all.py`.
+
+## What This Project Does
+
+At a high level, the project:
+- reads soil and sensor measurements from a real serial device or a simulator
+- stores readings in a local SQLite database
+- serves a dashboard UI from a FastAPI backend
+- streams live readings to the browser using Server-Sent Events
+- loads trained model artifacts from `model/` to support crop prediction
+- provides scripts for training and regenerating artifacts
+
+## Repository Layout
+
+Important top-level paths:
+- `run_all.py` - starts the backend, sensor bridge, simulator, and public tunnel options
+- `main.py` - model and utility entrypoint used by the project
+- `dashboard/backend/` - FastAPI app, database layer, and API endpoints
+- `dashboard/frontend/` - browser UI files served by the backend
+- `dashboard/serial_reader.py` - reads from the serial sensor and posts readings to the API
+- `dashboard/simulated_sensor.py` - emits synthetic readings for testing
+- `model_training.py` - primary training script
+- `train_*.py` - alternative training scripts for different datasets or workflows
+- `model/` - stored model and preprocessing artifacts
+- `artifacts/` - analysis outputs and generated reports
+- `dashboard/data/` - exported dashboard data such as reading logs
 
 ## Requirements
+
 - Python 3.11.9
 - A virtual environment
-- Dependencies from `requirements.txt`
+- Packages from `requirements.txt`
+- WSL recommended for day-to-day work in this repository
 
-## WSL First
-This project is used mostly from WSL, so the commands below are written with that in mind.
+## WSL-First Setup
 
-Recommended WSL workflow:
-- Open the repo from your WSL shell.
-- Create and activate the virtual environment inside WSL.
-- Run `run_all.py` from WSL for the dashboard, backend, and sensor bridge.
-- Use PowerShell only when you specifically need Windows-native tools or paths.
+This repository is used mostly from WSL, so the examples below favor WSL/Linux commands.
 
-## Setup
+### Recommended WSL workflow
+- Open the repository in your WSL shell.
+- Create the virtual environment inside WSL.
+- Install dependencies inside WSL.
+- Run `run_all.py` from WSL for the normal dashboard workflow.
+- Use PowerShell only when you need a Windows-native tool or path.
 
-WSL / Linux:
+### Install dependencies in WSL
 
 ```bash
 python3 -m venv .venv
@@ -31,7 +55,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Windows PowerShell:
+### Install dependencies in PowerShell
 
 ```powershell
 python -m venv .venv
@@ -39,112 +63,212 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-If you use a `.env` file, place it in the project root or in `dashboard/.env`.
+### Notes for WSL users
+- Use Linux paths inside WSL, such as `/mnt/c/Users/...` when accessing Windows files.
+- Keep the virtual environment in the repository so the same commands work every time.
+- If you are switching between WSL and PowerShell, reactivate the correct virtual environment before running scripts.
 
-## What `run_all.py` Does
-`run_all.py` is the main orchestration entrypoint.
+## Configuration
 
-It does the following:
-- loads environment values from `.env` files when present
-- starts the FastAPI backend through `uvicorn` using `dashboard.backend.app:app`
-- waits for the backend to become ready before starting other processes
-- starts the serial sensor bridge when a serial port is available
-- can start the simulator instead of the real sensor when `--simulate` is used
-- can expose the dashboard publicly when `--public` is enabled
-- cleans up child processes and tunnels on exit
+Configuration is usually supplied through environment variables or a `.env` file.
 
-Useful flags:
-- `--no-serial` skips the serial bridge
-- `--simulate` uses the simulated sensor
-- `--public` enables a public tunnel for the dashboard
-- `--public-provider` selects `cloudflare` or `ngrok`
-- `--env` loads a specific `.env` file
+Common files:
+- project root `.env`
+- `dashboard/.env`
 
-Example commands:
+Common variables:
+- `DASHBOARD_API_KEY` - API key used by the backend and frontend for protected routes
+- `DASHBOARD_HOST` - host for the backend server, default `0.0.0.0`
+- `DASHBOARD_PORT` - backend port, default `8001`
+- `SERIAL_PORT` - serial device path for the sensor bridge
+- `SIMULATE_SENSOR` - set to `1` to prefer the simulated sensor when available
+- `ENABLE_PUBLIC_DASHBOARD` - set to `1` to expose the dashboard publicly
+- `PUBLIC_TUNNEL_PROVIDER` - select `cloudflare` or `ngrok`
+- `CLOUDFLARED_BIN` - optional path to the Cloudflare tunnel executable
+- `NGROK_AUTHTOKEN` - optional ngrok auth token
+- `FORCE_START_BOT_ON_PI` - override the platform safety check if needed
+
+## How `run_all.py` Works
+
+`run_all.py` is the main entrypoint for the dashboard stack.
+
+It performs these steps:
+1. Loads environment variables from `.env` files when present.
+2. Starts the FastAPI backend with `uvicorn`.
+3. Waits for the backend to become ready.
+4. Starts the serial reader when a serial port is configured.
+5. Starts the simulator when `--simulate` is used.
+6. Optionally exposes the dashboard through a public tunnel when `--public` is enabled.
+7. Cleans up child processes and tunnels when the script exits.
+
+Command-line flags supported by `run_all.py`:
+- `--no-serial` - skip the serial bridge
+- `--simulate` - use the simulator instead of a real sensor
+- `--public` - open a public tunnel to the dashboard
+- `--public-provider` - choose the tunnel provider
+- `--env` - load a specific `.env` file
+
+### Common `run_all.py` commands
+
+Start the full dashboard stack:
 
 ```bash
 python run_all.py
+```
+
+Start the simulator instead of the real sensor:
+
+```bash
 python run_all.py --simulate
+```
+
+Skip the serial bridge:
+
+```bash
 python run_all.py --no-serial
+```
+
+Open a public tunnel:
+
+```bash
 python run_all.py --public
+```
+
+Use a specific tunnel provider:
+
+```bash
 python run_all.py --public --public-provider ngrok
+```
+
+Load a specific environment file:
+
+```bash
 python run_all.py --env dashboard/.env
 ```
 
-When running in WSL, prefer the `python3` command and Linux paths. If you need to access Windows-mounted files, use the `/mnt/c/...` path style.
-
 ## Dashboard Architecture
 
+The dashboard is split into two main parts:
+
 ### Backend
-The backend lives in `dashboard/backend/app.py` and is built with FastAPI. It:
-- exposes REST endpoints for readings, predictions, soil commands, and plant history
-- stores sensor data in a SQLite database through SQLAlchemy
-- streams live sensor updates using Server-Sent Events
-- loads prediction artifacts from `model/` when crop predictions are requested
+The backend lives in `dashboard/backend/app.py` and uses FastAPI. It is responsible for:
+- exposing REST endpoints for readings, predictions, soil commands, and plant history
+- storing incoming sensor data in SQLite through SQLAlchemy
+- emitting live updates through Server-Sent Events
+- loading prediction artifacts from `model/` on demand
+- serving the frontend static files from `dashboard/frontend/`
+
+Database behavior:
+- `dashboard/backend/database.py` configures the SQLite connection
+- readings are stored locally in `dashboard.db`
+- the schema is initialized automatically at startup
 
 ### Frontend
-The frontend lives in `dashboard/frontend/` and is a static web app served by the backend. It includes:
-- `index.html`
-- `history.html`
-- `prediction.html`
-- `commands.html`
-- `app.js`
-- `prediction.js`
-- `commands.js`
-- `style.css`
+The frontend lives in `dashboard/frontend/` and is served as static files by the backend.
 
-The frontend:
-- reads the API base URL from the page or the current origin
-- calls backend endpoints to load readings and prediction data
-- listens to the live SSE stream for real-time updates
-- updates charts, tables, and prediction panels in the browser
+Frontend files include:
+- `index.html` - main dashboard page
+- `history.html` - reading history page
+- `prediction.html` - prediction page
+- `commands.html` - command and management page
+- `app.js` - shared dashboard logic, charts, live updates, and data loading
+- `prediction.js` - prediction page behavior
+- `commands.js` - command page behavior
+- `style.css` - shared styling
+- `manifest.json` - PWA manifest
 
-### How they work together
-1. The sensor bridge or simulator sends readings to `POST /api/readings`.
-2. The backend saves the reading to SQLite and broadcasts it over `/api/stream`.
-3. The frontend receives the event stream and updates the dashboard live.
-4. The frontend can also request history, latest readings, and crop predictions from the REST API.
+Frontend behavior:
+- it reads the API base URL from the page or current origin
+- it calls backend endpoints to fetch readings and predictions
+- it uses Server-Sent Events for live updates
+- it updates charts, cards, and tables in the browser without page reloads
 
-## Run Options
+### Data flow between frontend and backend
+1. The sensor bridge or simulator sends a reading to `POST /api/readings`.
+2. The backend validates and stores the reading in SQLite.
+3. The backend broadcasts the new reading to connected browsers through `/api/stream`.
+4. The frontend receives the event and updates the UI immediately.
+5. The frontend can also request history, latest readings, and predictions using REST endpoints.
 
-Start the dashboard and sensor bridge:
+## Backend API Overview
 
-```bash
-python run_all.py
-```
+The backend provides several useful routes:
 
-From WSL, this is the preferred way to run the project.
+- `POST /api/readings` - store a new sensor reading
+- `GET /api/readings/latest` - return the newest reading
+- `GET /api/readings/history` - return recent readings for tables and charts
+- `GET /api/stream` - Server-Sent Events stream for live updates
+- `POST /api/predict` - predict the most suitable crop from soil values
+- `GET /api/predict/history` - predict crops for recent readings
+- `POST /api/commands/soil` - store a soil entry
+- `GET /api/commands/soil` - list stored soil entries
+- `DELETE /api/commands/soil/{soil_id}` - delete a stored soil entry
+- `POST /api/commands/soil/{soil_id}/suitability` - evaluate suitability for a crop
+- `POST /api/commands/soil/test-crops` - test multiple crops at once
+- `GET /api/commands/plants` - get plant history
+- `POST /api/commands/plants/previous` - update the previous plant
+- `POST /api/commands/plants/next` - update the next plant
+- `GET /api/commands/status` - fetch the latest sensor status
 
-Use the simulated sensor:
+## Model Artifacts and Prediction
 
-```bash
-python run_all.py --simulate
-```
+The backend loads prediction assets from `model/` when crop prediction endpoints are used.
 
-Expose the dashboard publicly:
+Typical artifacts include:
+- a saved model file such as `.keras` or `.h5`
+- `scaler.save`
+- `label_encoder.save`
 
-```bash
-python run_all.py --public
-```
+If prediction fails because artifacts are missing:
+1. Re-run the training scripts.
+2. Confirm the files were written into the correct `model/` directory.
+3. Restart the dashboard stack.
 
-Train or regenerate model artifacts:
+## Training and Regenerating Artifacts
+
+Use the training scripts when you need new model files or preprocessing artifacts.
+
+Examples:
 
 ```bash
 python model_training.py
 python train_on_prepared.py
+python train_filtered.py
+python train_trimmed_ann.py
 ```
 
-## Data and Artifacts
-- `model/` stores trained model files and preprocessing artifacts.
-- `artifacts/` stores analysis outputs such as correlation data.
-- `dashboard/data/` stores dashboard data files such as readings exports.
+The exact script depends on the dataset or experiment you want to reproduce.
+
+## Run Examples
+
+Full dashboard stack:
+
+```bash
+python run_all.py
+```
+
+Dashboard with simulator:
+
+```bash
+python run_all.py --simulate
+```
+
+Public dashboard:
+
+```bash
+python run_all.py --public
+```
 
 ## Troubleshooting
-- If the backend cannot find model artifacts, rerun the training scripts and confirm the expected files exist in `model/`.
-- If live updates do not appear, check the browser console and confirm the frontend can reach `/api/stream`.
-- If you expose the dashboard publicly, make sure `DASHBOARD_API_KEY` is set to a strong value.
+
+- If the backend does not start, check that the virtual environment is active and `uvicorn` is installed.
+- If live readings do not appear, confirm the serial bridge or simulator is running and that the backend is reachable.
+- If the frontend shows stale data, refresh the page and confirm the browser can reach `/api/stream`.
+- If model predictions fail, verify the expected files exist in `model/`.
+- If you are on WSL and a Windows path does not work, convert it to a WSL path under `/mnt/c/...`.
 
 ## Notes
-- The project is designed to run the dashboard, backend, and sensor bridge together.
-- The frontend and backend share the same host and port when served by `run_all.py`.
-- The dashboard is intended to provide live monitoring, history, and crop prediction tools in one place.
+
+- The frontend and backend share the same host and port when started by `run_all.py`.
+- The dashboard is meant to provide live monitoring, historical data, and prediction tools in one place.
+- WSL is the preferred environment for running the project on this machine.
