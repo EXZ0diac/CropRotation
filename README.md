@@ -1,144 +1,106 @@
-# CropRotationAI — Quick runbook
+# CropRotationAI
 
-This README explains the three main entrypoints in this repository and how to run them, with common environment variables and Raspberry Pi deployment notes.
+CropRotationAI is a toolkit for reading soil/sensor data, running a dashboard, and training/serving ML models to assist with crop-rotation and crop-prediction workflows.
 
-## Overview
+This README provides a concise setup guide, quick run commands for the main components, and where to find artifacts.
 
-- `run_all.py` — Orchestration script that starts the dashboard (FastAPI/uvicorn), the serial bridge (real sensor), and optionally the dashboard's Telegram bot. Intended to run on a host that directly connects to the soil sensor (e.g., a Raspberry Pi).
+## Quick summary
+- Dashboard & sensor bridge: `run_all.py` (typically run on the device attached to sensors — e.g. Raspberry Pi).
+- Telegram bot & model runner: `main.py` (run on a reachable machine or cloud instance; supports webhook via ngrok/cloudflare).
+- Model training: training scripts such as `model_training.py` (produce artifacts in `model/`).
 
-- `main.py` — The Telegram bot and ML model runner. This script runs the crop prediction bot, the Flask webhook endpoint, and the crop prediction model (Keras/TFLite). Typical use: run this on a machine reachable from Telegram (laptop or cloud) so it can receive updates via webhook. It contains logic to detect Raspberry Pi and default to polling/local mode there.
+## Prerequisites
+- Python 3.10–3.12 recommended.
+- Create and activate a virtual environment and install dependencies:
 
-- `model_training.py` — Notebooks/scripting entrypoint for training or re-training the crop rotation model. Use this to produce model artifacts (Keras `.h5`/`.keras`, TFLite `.tflite`, `scaler.save`, `label_encoder.save`) placed in the `model/` directory.
-
-## High-level deployment pattern (recommended)
-
-- Raspberry Pi (or the machine connected to the soil sensor): run `run_all.py` to host the dashboard (uvicorn) and the serial-to-dashboard bridge. By default the Pi will NOT start the dashboard's Telegram bot to avoid multiple processes using the same Telegram token.
-
-- Laptop or cloud server: run `main.py` to run the Telegram bot which receives Telegram updates. `main.py` can create an ngrok tunnel (if `USE_WEBHOOK=1`) so Telegram can reach your laptop behind NAT.
-
-This separation avoids running two processes that both receive Telegram updates for the same token, which causes conflicts.
-
-## `run_all.py` — usage and env
-
-Purpose: start dashboard components together for local deployments.
-
-Usage:
-
-PowerShell (Windows) / Bash (Linux):
-
-```bash
-# From repo root
-python run_all.py            # load .env if present in project/dashboad and start components
-python run_all.py --no-bot   # explicitly don't start the dashboard bot
-python run_all.py --no-serial # don't start serial bridge
-python run_all.py --simulate  # start simulator instead of real serial
-python run_all.py --env /path/to/.env  # load a specific .env
-```
-
-Important environment variables used by `run_all.py`:
-
-- `DASHBOARD_HOST` — host for uvicorn (default `0.0.0.0`).
-- `DASHBOARD_PORT` — port for uvicorn (default `8001`).
-- `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` — when set, `run_all.py` can start the dashboard's Telegram bot unless skipped.
-- `SERIAL_PORT` — serial device for the sensor bridge.
-- `SIMULATE_SENSOR` — if set to `1` or `--simulate` is passed, the simulated sensor runs instead of serial bridge.
-- `FORCE_START_BOT_ON_PI` — if running on a Raspberry Pi, `run_all.py` will skip starting the bot to avoid conflicts. Set this to `1` to override and force the bot to start on Pi.
-- `ENABLE_PUBLIC_DASHBOARD` — set to `1` to expose the dashboard over the internet.
-- `PUBLIC_TUNNEL_PROVIDER` — choose `cloudflare` or `ngrok` (default: `cloudflare`).
-- `CLOUDFLARED_BIN` — optional full path to `cloudflared` if not in PATH.
-- `NGROK_AUTHTOKEN` — optional ngrok token for better reliability and limits (only for ngrok provider).
-
-Raspberry Pi auto-skip behavior:
-- `run_all.py` includes a best-effort Pi detector. On Pi it will automatically skip starting the dashboard's Telegram bot unless `FORCE_START_BOT_ON_PI=1`.
-
-Public internet access (Pi in garden, monitor from home):
-
-You can expose the dashboard from the Raspberry Pi even when your phone/laptop is on a different network.
-
-Option A (Cloudflare, one-time command):
-
-```bash
-python3 run_all.py --public
-```
-
-Option B (Cloudflare, explicit provider):
-
-```bash
-python3 run_all.py --public --public-provider cloudflare
-```
-
-Option C (via env):
-
-```bash
-export ENABLE_PUBLIC_DASHBOARD=1
-export PUBLIC_TUNNEL_PROVIDER=cloudflare
-python3 run_all.py
-```
-
-Option D (ngrok provider):
-
-```bash
-export ENABLE_PUBLIC_DASHBOARD=1
-export PUBLIC_TUNNEL_PROVIDER=ngrok
-export NGROK_AUTHTOKEN=<your-ngrok-token>   # optional but recommended
-python3 run_all.py
-```
-
-When started, `run_all.py` prints a `Public dashboard URL` that you can open from anywhere.
-Keep `DASHBOARD_API_KEY` private before sharing the link.
-
-Cloudflare install note on Raspberry Pi:
-
-Install `cloudflared` from Cloudflare docs for your distro/arch, then verify:
-
-```bash
-cloudflared --version
-```
-
-## `main.py` — usage and env
-
-Purpose: run the Telegram bot, model loading (Keras/TFLite), and provide a Flask `/webhook` route for Telegram webhooks when using `USE_WEBHOOK=1`.
-
-Usage (PowerShell example):
+Windows (PowerShell):
 
 ```powershell
-# set bot token and run in webhook mode (creates ngrok tunnel)
-$env:TELEGRAM_BOT_TOKEN = 'your_token_here'
-$env:USE_WEBHOOK = '1'
-python .\main.py
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-Or, run in polling/local mode (no webhook):
+Linux / macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Note: TensorFlow is conditionally specified in `requirements.txt` for Python version compatibility. If you run into wheel availability issues, use the appropriate `tf-nightly` wheel or a supported Python version.
+
+## Configuration
+Place environment variables in a `.env` file or export them in your shell. Common variables:
+
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token (required for bot).
+- `USE_WEBHOOK` — set to `1` to use webhook mode (requires a public tunnel), otherwise polling is used.
+- `DASHBOARD_HOST`, `DASHBOARD_PORT` — dashboard binding (defaults: `0.0.0.0:8001`).
+- `SERIAL_PORT` — serial device path (e.g. `/dev/ttyUSB0` or `COM3`).
+- `SIMULATE_SENSOR` — set to `1` to use the simulated sensor.
+- `ENABLE_PUBLIC_DASHBOARD`, `PUBLIC_TUNNEL_PROVIDER` — set to enable public dashboard access (`cloudflare` or `ngrok`).
+
+## Running the main components
+
+1) Dashboard + sensor bridge (recommended on the device connected to sensors):
+
+```bash
+python run_all.py            # runs dashboard + sensor bridge; auto-skips bot on Raspberry Pi
+python run_all.py --no-bot   # skip the dashboard bot
+python run_all.py --simulate # run the simulator instead of real serial
+```
+
+2) Telegram bot & model runner (run on a laptop or cloud instance):
+
+Webhook mode (creates a tunnel and registers webhook):
 
 ```powershell
-$env:TELEGRAM_BOT_TOKEN = 'your_token_here'
-# ensure USE_WEBHOOK is unset or '0'
-$env:USE_WEBHOOK = '0'
-python .\main.py
+$env:TELEGRAM_BOT_TOKEN='your_token'
+$env:USE_WEBHOOK='1'
+python main.py
 ```
 
-Key environment variables and files used by `main.py`:
+Polling/local mode:
 
-- `TELEGRAM_BOT_TOKEN` — required for the Telegram bot.
-- `USE_WEBHOOK` — when set to `1`, `main.py` opens an ngrok tunnel and registers a Telegram webhook; otherwise it uses polling/local mode.
-- `FORCE_WEBHOOK_ON_PI` — even if `main.py` detects Raspberry Pi, setting this to `1` will allow webhook behavior on Pi (not recommended unless you know what you're doing).
-- `DASHBOARD_API_BASE` — base URL of the dashboard API (default `http://127.0.0.1:8001`).
-- `DASHBOARD_API_KEY` — API key used for dashboard requests (default `dev-token`).
+```powershell
+$env:TELEGRAM_BOT_TOKEN='your_token'
+$env:USE_WEBHOOK='0'
+python main.py
+```
 
-Notes:
-- `main.py` will attempt to load model artifacts from `model/` (look for `crop_rotation_model.keras`, `.h5`, or `.tflite`) and preprocessing artifacts (`scaler.save`, `label_encoder.save`).
-- On Raspberry Pi the script detects the platform and will force `USE_WEBHOOK=0` by default (so it doesn't try to run ngrok/webhook on Pi). This behavior is intended to keep the Pi as the dashboard/serial host and run the bot elsewhere.
+3) Train models / create artifacts:
 
-## `model_training.py` — short guide
+```bash
+python model_training.py
+python train_on_prepared.py
+```
 
-Purpose: retrain the crop prediction model and write artifacts into `model/`.
+Training scripts write model and preprocessing artifacts to `model/` (e.g. `crop_rotation_model.keras`, `scaler.save`, `label_encoder.save`). `main.py` loads these artifacts at startup.
 
-Typical steps:
+## Tests
+Run unit tests (virtualenv active):
 
-1. Prepare training data and preprocessing pipeline.
-2. Run `model_training.py` (or open associated notebook if present) to train and export artifacts.
+```bash
+python -m pytest -q
+```
 
-Note: the repository stores model artifacts in `model/`. The bot (`main.py`) expects preprocessing artifacts named `scaler.save` and `label_encoder.save` produced by the training pipeline.
+## Artifacts & locations
+- `model/` — saved model files and preprocessing objects used by the bot.
+- `artifacts/` — exported analysis files (e.g. `correlation_matrix.csv`).
+- `model_dataset_*` — various exported datasets and model snapshots.
+
+## Troubleshooting
+- Make sure only one process uses the same Telegram token (do not run two bots for the same token).
+- If `main.py` reports missing artifacts, regenerate them with the training scripts and confirm they are in `model/`.
+- Prefer Cloudflare for Pi-based public tunnels; ngrok is supported but may require an auth token.
+
+## Next steps I can do for you
+- Split this into per-component READMEs, add `CONTRIBUTING.md`, or add a short `dashboard/README.md` with Pi-specific notes. Tell me which you prefer.
+
+---
+
+File: [README.md](README.md)
 
 ## Example deployment (recommended)
 
