@@ -96,34 +96,6 @@
           </div>
           <button class="btn-secondary" onclick="refreshSoilList()">Refresh List</button>
         </div>
-
-        <div class="command-form" style="margin-top: 20px;">
-          <h4>Check Crop Suitability</h4>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="check-soil-id">Select Soil Entry</label>
-              <select id="check-soil-id">
-                <option value="">Loading...</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="check-crop">Crop Name</label>
-              <select id="check-crop">
-                <option value="">-- Select a crop --</option>
-                <option value="Chili">Chili</option>
-                <option value="Cucumber">Cucumber</option>
-                <option value="Groundnut">Groundnut</option>
-                <option value="Maize">Maize</option>
-                <option value="Paddy">Paddy</option>
-                <option value="Spinach">Spinach</option>
-              </select>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn-primary" onclick="checkSuitability()">Check Suitability</button>
-          </div>
-          <div id="suitability-result"></div>
-        </div>
       </div>
 
       <!-- Tab 2: Test Crops -->
@@ -131,52 +103,16 @@
         <h3>Test Multiple Crops</h3>
         
         <div class="command-form">
-          <h4>Add Crop Test</h4>
-          <p style="font-size: 13px; color: #666; margin-top: 0;">Enter crop name and soil values to test</p>
+          <h4>Check Crop Suitability & Test All Crops</h4>
+          <p style="font-size: 13px; color: #666; margin-top: 0;">Select a soil entry to test all crops at once</p>
           <div class="form-group">
-            <label for="test-crop-name">Crop Name</label>
-            <input type="text" id="test-crop-name" placeholder="e.g., Chili, Maize">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Nitrogen</label>
-              <input type="number" id="test-n" step="0.1" placeholder="80">
-            </div>
-            <div class="form-group">
-              <label>Phosphorus</label>
-              <input type="number" id="test-p" step="0.1" placeholder="45">
-            </div>
-            <div class="form-group">
-              <label>Potassium</label>
-              <input type="number" id="test-k" step="0.1" placeholder="40">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>pH</label>
-              <input type="number" id="test-ph" step="0.1" placeholder="6.5">
-            </div>
-            <div class="form-group">
-              <label>Moisture (%)</label>
-              <input type="number" id="test-moisture" step="0.1" placeholder="60">
-            </div>
-            <div class="form-group">
-              <label>Temperature (°C)</label>
-              <input type="number" id="test-temperature" step="0.1" placeholder="27">
-            </div>
+            <label for="test-soil-entry">Select Soil Entry</label>
+            <select id="test-soil-entry">
+              <option value="">-- Select a soil entry --</option>
+            </select>
           </div>
           <div class="btn-group">
-            <button class="btn-primary" onclick="addCropTest()">Add Crop</button>
-            <button class="btn-secondary" onclick="clearTestForm()">Clear</button>
-          </div>
-        </div>
-
-        <div>
-          <h4>Crops to Test</h4>
-          <div id="test-crops-queue" style="margin-bottom: 16px;"></div>
-          <div class="btn-group">
-            <button class="btn-primary" onclick="runAllTests()">Test All Crops</button>
-            <button class="btn-secondary" onclick="clearTestQueue()">Clear Queue</button>
+            <button class="btn-primary" onclick="testAllCropsBySoil()">Test All Crops</button>
           </div>
         </div>
 
@@ -190,28 +126,33 @@
         <div id="plants-current" style="margin-bottom: 20px;"></div>
 
         <div class="command-form">
-          <h4>Set Previous Plant</h4>
+          <h4>Set Next Plant & Update History</h4>
+          <p style="font-size: 13px; color: #666; margin-top: 0;">Select the crop you plan to plant next. The current next plant will become the previous plant.</p>
           <div class="form-group">
-            <label for="prev-plant">Plant Name</label>
-            <input type="text" id="prev-plant" placeholder="e.g., Paddy">
-          </div>
-          <div class="btn-group">
-            <button class="btn-primary" onclick="setPreviousPlant()">Set Previous Plant</button>
-          </div>
-          <div id="prev-plant-result"></div>
-        </div>
-
-        <div class="command-form">
-          <h4>Set Next Plant</h4>
-          <div class="form-group">
-            <label for="next-plant">Plant Name</label>
-            <input type="text" id="next-plant" placeholder="e.g., Maize">
+            <label for="next-plant">Select Crop</label>
+            <select id="next-plant">
+              <option value="">-- Select a crop --</option>
+              <option value="Chili">Chili</option>
+              <option value="Cucumber">Cucumber</option>
+              <option value="Groundnut">Groundnut</option>
+              <option value="Maize">Maize</option>
+              <option value="Paddy">Paddy</option>
+              <option value="Spinach">Spinach</option>
+              <option value="Tomato">Tomato</option>
+              <option value="Eggplant">Eggplant</option>
+              <option value="Okra">Okra</option>
+              <option value="Bitter Gourd">Bitter Gourd</option>
+              <option value="Pumpkin">Pumpkin</option>
+              <option value="Brinjal">Brinjal</option>
+            </select>
           </div>
           <div class="btn-group">
             <button class="btn-primary" onclick="setNextPlant()">Set Next Plant</button>
           </div>
           <div id="next-plant-result"></div>
         </div>
+
+        <div id="plant-preparation"></div>
       </div>
 
       <!-- Tab 4: Sensor Status -->

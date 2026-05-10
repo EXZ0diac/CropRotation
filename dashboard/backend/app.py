@@ -508,6 +508,17 @@ IDEAL_RANGES = {
     "Spinach": {"N": (40, 100), "P": (20, 60), "K": (30, 70), "pH": (6.0, 7.5), "Moisture": (50, 80), "Temperature": (10, 24)},
 }
 
+# Alternative Malaysian crops suggestions
+ALTERNATIVE_CROPS = {
+    "Tomato": {"N": (70, 120), "P": (30, 60), "K": (40, 80), "pH": (5.5, 7.0), "Moisture": (60, 80), "Temperature": (18, 28)},
+    "Eggplant": {"N": (80, 120), "P": (30, 60), "K": (40, 80), "pH": (5.5, 7.0), "Moisture": (60, 80), "Temperature": (20, 30)},
+    "Okra": {"N": (60, 100), "P": (25, 50), "K": (40, 80), "pH": (5.5, 7.5), "Moisture": (50, 70), "Temperature": (20, 35)},
+    "Bitter Gourd": {"N": (60, 100), "P": (25, 50), "K": (30, 70), "pH": (6.0, 7.5), "Moisture": (50, 70), "Temperature": (18, 30)},
+    "Pumpkin": {"N": (50, 100), "P": (25, 50), "K": (40, 80), "pH": (5.5, 7.5), "Moisture": (50, 80), "Temperature": (18, 28)},
+    "Brinjal": {"N": (80, 120), "P": (30, 60), "K": (40, 80), "pH": (5.5, 7.0), "Moisture": (60, 80), "Temperature": (20, 30)},
+}
+
+
 
 class SoilEntryCreate(BaseModel):
     label: Optional[str] = None
@@ -536,6 +547,79 @@ class PlantUpdateRequest(BaseModel):
     plant_name: str
 
 
+def _analyze_crop_suitability(crop_name: str, soil_values: list):
+    """Analyze which soil parameters match ideal ranges for a crop.
+    
+    Args:
+        crop_name: Crop name
+        soil_values: [N, P, K, pH, Moisture, Temperature]
+    
+    Returns:
+        dict with matched and unmatched parameters
+    """
+    ideal = IDEAL_RANGES.get(crop_name, {})
+    if not ideal:
+        return {"matched": [], "unmatched": []}
+    
+    labels = ["N", "P", "K", "pH", "Moisture", "Temperature"]
+    matched = []
+    unmatched = []
+    
+    for i, label in enumerate(labels):
+        if i >= len(soil_values):
+            continue
+        val = soil_values[i]
+        if label in ideal:
+            min_val, max_val = ideal[label]
+            unit = "%" if label == "Moisture" else ("°C" if label == "Temperature" else "")
+            if min_val <= val <= max_val:
+                matched.append(f"{label}: {val}{unit} ✓")
+            else:
+                unmatched.append(f"{label}: {val}{unit} (ideal {min_val}-{max_val}{unit})")
+    
+    return {"matched": matched, "unmatched": unmatched}
+
+
+def _get_alternative_crop_suggestions(soil_values: list, excluded_crops: list):
+    """Get alternative crop suggestions based on soil values.
+    
+    Args:
+        soil_values: [N, P, K, pH, Moisture, Temperature]
+        excluded_crops: List of crop names to exclude
+    
+    Returns:
+        list of suggested crops with match score
+    """
+    labels = ["N", "P", "K", "pH", "Moisture", "Temperature"]
+    suggestions = []
+    
+    for crop_name, ideal in ALTERNATIVE_CROPS.items():
+        if crop_name.lower() in [c.lower() for c in excluded_crops]:
+            continue
+        
+        matched_count = 0
+        for i, label in enumerate(labels):
+            if i >= len(soil_values):
+                continue
+            val = soil_values[i]
+            if label in ideal:
+                min_val, max_val = ideal[label]
+                if min_val <= val <= max_val:
+                    matched_count += 1
+        
+        match_percentage = (matched_count / len(labels)) * 100
+        if match_percentage >= 50:  # Only suggest if at least 50% match
+            suggestions.append({
+                "crop": crop_name,
+                "match_percentage": match_percentage,
+                "matched_params": matched_count
+            })
+    
+    # Sort by match percentage
+    suggestions.sort(key=lambda x: x["match_percentage"], reverse=True)
+    return suggestions
+
+
 def _suitability_check(desired_crop: str, soil_values: list):
     """Check soil suitability for a crop.
     
@@ -544,9 +628,9 @@ def _suitability_check(desired_crop: str, soil_values: list):
         soil_values: [N, P, K, pH, Moisture, Temperature]
     
     Returns:
-        dict with: suitable (bool), top_prob (float), predicted (str), alternatives (list), procedures (list)
+        dict with: suitable (bool), top_prob (float), predicted (str), alternatives (list), procedures (list), analysis (dict)
     """
-    result = {"suitable": False, "top_prob": 0.0, "predicted": None, "alternatives": [], "procedures": []}
+    result = {"suitable": False, "top_prob": 0.0, "predicted": None, "alternatives": [], "procedures": [], "analysis": {}}
     
     try:
         # Get model prediction
@@ -561,6 +645,10 @@ def _suitability_check(desired_crop: str, soil_values: list):
         top_preds = pred_result.get("top_predictions", [])
         alternatives = [p["crop"] for p in top_preds if p["crop"].lower() != desired_crop.lower()]
         result["alternatives"] = alternatives[:2]
+        
+        # Analyze suitability
+        analysis = _analyze_crop_suitability(desired_crop, soil_values)
+        result["analysis"] = analysis
         
         # Check exact match
         if predicted_crop.lower() == desired_crop.lower() and top_prob >= 0.6:
@@ -595,6 +683,7 @@ def _suitability_check(desired_crop: str, soil_values: list):
     except Exception as e:
         result["procedures"] = [f"Error checking suitability: {e}"]
         return result
+
 
 
 # ============================
@@ -663,6 +752,60 @@ def check_crop_suitability(soil_id: int, payload: SuitabilityCheckRequest, db: S
     result["soil_label"] = soil.label
     result["crop_name"] = payload.crop_name
     return result
+
+
+@app.get("/api/commands/soil/{soil_id}/all-suitable-crops")
+def get_all_suitable_crops(soil_id: int, db: Session = Depends(get_db), _=Depends(require_api_key)):
+    """Check all crops and return which ones are suitable for the given soil."""
+    soil = db.query(models.SoilEntry).filter(models.SoilEntry.id == soil_id).first()
+    if not soil:
+        raise HTTPException(status_code=404, detail="Soil entry not found")
+    
+    values = [soil.n, soil.p, soil.k, soil.ph, soil.moisture, soil.temperature]
+    
+    suitable_crops = []
+    unsuitable_crops = []
+    all_crop_names = list(IDEAL_RANGES.keys())
+    
+    for crop_name in all_crop_names:
+        result = _suitability_check(crop_name, values)
+        crop_info = {
+            "crop_name": crop_name,
+            "suitable": result["suitable"],
+            "predicted": result["predicted"],
+            "top_prob": result["top_prob"],
+            "alternatives": result["alternatives"],
+            "procedures": result["procedures"],
+            "analysis": result["analysis"],
+        }
+        
+        if result["suitable"]:
+            suitable_crops.append(crop_info)
+        else:
+            unsuitable_crops.append(crop_info)
+    
+    # Sort by probability
+    suitable_crops.sort(key=lambda x: x["top_prob"], reverse=True)
+    
+    # Get alternative crop suggestions
+    alternative_suggestions = _get_alternative_crop_suggestions(values, all_crop_names)
+    
+    return {
+        "soil_id": soil_id,
+        "soil_label": soil.label,
+        "soil_values": {
+            "N": soil.n,
+            "P": soil.p,
+            "K": soil.k,
+            "pH": soil.ph,
+            "Moisture": soil.moisture,
+            "Temperature": soil.temperature,
+        },
+        "suitable_crops": suitable_crops,
+        "unsuitable_crops": unsuitable_crops,
+        "alternative_crops": alternative_suggestions,
+    }
+
 
 
 @app.post("/api/commands/soil/test-crops")
@@ -749,18 +892,24 @@ def set_previous_plant(payload: PlantUpdateRequest, db: Session = Depends(get_db
 
 @app.post("/api/commands/plants/next")
 def set_next_plant(payload: PlantUpdateRequest, db: Session = Depends(get_db), _=Depends(require_api_key)):
-    """Set or update the next plant."""
+    """Set or update the next plant. Automatically sets current next_plant as previous_plant."""
     plant_entry = db.query(models.PlantHistory).first()
+    
     if not plant_entry:
+        # No history yet, just set next_plant
         plant_entry = models.PlantHistory(previous_plant=None, next_plant=payload.plant_name)
         db.add(plant_entry)
     else:
+        # Move current next_plant to previous_plant, then set new next_plant
+        if plant_entry.next_plant:
+            plant_entry.previous_plant = plant_entry.next_plant
         plant_entry.next_plant = payload.plant_name
     
     db.commit()
     db.refresh(plant_entry)
     return {
         "status": "set",
+        "previous_plant": plant_entry.previous_plant,
         "next_plant": plant_entry.next_plant,
     }
 
