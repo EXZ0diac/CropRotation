@@ -1,8 +1,10 @@
 import os
 import joblib
 import numpy as np
+import pandas as pd
 import asyncio
 import threading
+from datetime import datetime
 from flask import Flask, request
 from dotenv import load_dotenv
 import importlib
@@ -58,11 +60,12 @@ app = Flask(__name__)
 # -----------------------------
 # Load ANN model, scaler, and label encoder (with TFLite fallback)
 # -----------------------------
-MODEL_PATH = "model/crop_rotation_model.h5"
-MODEL_KERAS_PATH = "model/crop_rotation_model.keras"
-MODEL_TFLITE_PATH = "model/crop_rotation_model.tflite"
-SCALER_PATH = "model/scaler.save"
-LE_PATH = "model/label_encoder.save"
+MODEL_DIR = os.getenv("CROP_MODEL_DIR", "model/chili_eggplant_model")
+MODEL_PATH = os.path.join(MODEL_DIR, "chili_eggplant_model.h5")
+MODEL_KERAS_PATH = os.path.join(MODEL_DIR, "chili_eggplant_model.keras")
+MODEL_TFLITE_PATH = os.path.join(MODEL_DIR, "chili_eggplant_model.tflite")
+SCALER_PATH = os.path.join(MODEL_DIR, "scaler.save")
+LE_PATH = os.path.join(MODEL_DIR, "label_encoder.save")
 
 # Runtime objects (one of these will be set)
 model = None
@@ -141,11 +144,12 @@ def predict_crop(soil_data):
 
     Supports Keras model (if loaded) or TFLite interpreter (if loaded).
     """
-    data = np.array([soil_data])
     if scaler is None or label_encoder is None:
         raise RuntimeError("Preprocessors (scaler/label_encoder) are not loaded")
 
-    scaled = scaler.transform(data)
+    feature_names = list(getattr(scaler, "feature_names_in_", ["N", "P", "K", "pH", "Moisture", "Temperature"]))
+    data_frame = pd.DataFrame([soil_data], columns=feature_names)
+    scaled = scaler.transform(data_frame)
 
     # Keras path
     if model is not None:
@@ -322,16 +326,165 @@ def save_user_soil():
     except Exception as e:
         print(f"Could not save user soil file: {e}")
 
-# Typical ideal ranges for a few crops (N,P,K in arbitrary units, pH, moisture %, temperature °C)
+# Typical ideal ranges for the Chili/Eggplant model (Telegram only).
 # These are illustrative; adjust to your domain knowledge as needed.
 ideal_ranges = {
     "Chili":    {"N": (70, 120), "P": (30, 60), "K": (30, 60), "pH": (5.5, 7.0), "Moisture": (50, 80), "Temperature": (20, 32)},
-    "Cucumber": {"N": (60, 120), "P": (20, 50), "K": (30, 80), "pH": (6.0, 7.0), "Moisture": (60, 90), "Temperature": (18, 30)},
-    "Groundnut":{"N": (40, 80),  "P": (20, 40), "K": (20, 60), "pH": (5.5, 6.5), "Moisture": (40, 70), "Temperature": (20, 30)},
-    "Maize":    {"N": (80, 140), "P": (30, 80), "K": (30, 80), "pH": (5.5, 7.5), "Moisture": (40, 70), "Temperature": (18, 32)},
-    "Paddy":    {"N": (80, 150), "P": (40, 80), "K": (40, 100),"pH": (5.0, 6.8), "Moisture": (70, 100),"Temperature": (20, 32)},
-    "Spinach":  {"N": (40, 100), "P": (20, 60), "K": (30, 70), "pH": (6.0, 7.5), "Moisture": (50, 80), "Temperature": (10, 24)},
+    "Eggplant": {"N": (60, 120), "P": (25, 60), "K": (35, 80), "pH": (5.5, 6.8), "Moisture": (50, 80), "Temperature": (22, 34)},
 }
+
+
+def _latest_reading_values(data):
+    """Extract dashboard readings into the model's input order."""
+    return [
+        data.get("np_n"),
+        data.get("np_p"),
+        data.get("np_k"),
+        data.get("ph"),
+        data.get("humidity"),
+        data.get("temperature"),
+    ]
+
+
+def _reading_plot_name(data):
+    """Best-effort plot label for the Telegram message."""
+    return data.get("plot_name") or data.get("plot") or data.get("label") or "Latest Sensor Reading"
+
+
+def _format_reading_time(value):
+    """Format the dashboard timestamp into a readable string."""
+    if value is None:
+        return "Unknown"
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).strip()
+    if not text:
+        return "Unknown"
+    try:
+        normalized = text.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return text
+
+
+def _format_number(value):
+    if value is None:
+        return "N/A"
+    try:
+        number = float(value)
+    except Exception:
+        return str(value)
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:.1f}"
+
+
+def _format_sensor_values(soil_values):
+    """Render the latest sensor reading in a compact text form."""
+    labels = ["N", "P", "K", "pH", "Moisture", "Temperature"]
+    units = ["", "", "", "", "%", "°C"]
+    parts = []
+    for label, value, unit in zip(labels, soil_values, units):
+        suffix = f" {unit}" if unit else ""
+        parts.append(f"{label}: {_format_number(value)}{suffix}")
+    return " | ".join(parts)
+
+
+def _analyze_against_crop(crop_name: str, soil_values):
+    """Compare a soil reading against the typical ranges for a crop."""
+    labels = ["N", "P", "K", "pH", "Moisture", "Temperature"]
+    friendly = {
+        "N": "Nitrogen",
+        "P": "Phosphorus",
+        "K": "Potassium",
+        "pH": "pH",
+        "Moisture": "Moisture",
+        "Temperature": "Temperature",
+    }
+
+    ideal = ideal_ranges.get(crop_name)
+    analysis_lines = []
+    issue_lines = []
+    recommendations = []
+    suitable = True
+
+    if not ideal:
+        return {
+            "suitable": False,
+            "analysis_lines": [],
+            "issue_lines": [],
+            "recommendations": ["No crop-specific ideal ranges available; check the reading manually."],
+        }
+
+    for label, value in zip(labels, soil_values):
+        if value is None or label not in ideal:
+            continue
+        lo, hi = ideal[label]
+        name = friendly[label]
+
+        if lo <= value <= hi:
+            if label in ("Moisture", "Temperature", "pH"):
+                analysis_lines.append(f"• {name}: Suitable")
+            else:
+                analysis_lines.append(f"• {name}: Good")
+            continue
+
+        suitable = False
+        if label in ("N", "P", "K"):
+            if value < lo:
+                issue_lines.append(f"❌ Low {name} detected")
+                issue_lines.append(f"Current {name}: {_format_number(value)}")
+                recommendations.append(f"Add {name.lower()} fertilizer")
+                analysis_lines.append(f"• {name}: Low")
+            else:
+                issue_lines.append(f"❌ High {name} detected")
+                issue_lines.append(f"Current {name}: {_format_number(value)}")
+                recommendations.append(f"Reduce excess {name.lower()} input")
+                analysis_lines.append(f"• {name}: High")
+        elif label == "pH":
+            if value < lo:
+                issue_lines.append("❌ pH level too low")
+                issue_lines.append(f"Current pH: {_format_number(value)}")
+                recommendations.append("Add lime to increase pH")
+                analysis_lines.append("• pH: Slightly acidic")
+            else:
+                issue_lines.append("❌ pH level too high")
+                issue_lines.append(f"Current pH: {_format_number(value)}")
+                recommendations.append("Apply elemental sulfur to lower pH")
+                analysis_lines.append("• pH: Slightly alkaline")
+        elif label == "Moisture":
+            if value < lo:
+                issue_lines.append("❌ Moisture level too low")
+                issue_lines.append(f"Current Moisture: {_format_number(value)}")
+                recommendations.append("Increase irrigation or improve water retention")
+                analysis_lines.append("• Moisture: Low")
+            else:
+                issue_lines.append("❌ Moisture level too high")
+                issue_lines.append(f"Current Moisture: {_format_number(value)}")
+                recommendations.append("Improve drainage to reduce waterlogging")
+                analysis_lines.append("• Moisture: High")
+        elif label == "Temperature":
+            if value < lo:
+                issue_lines.append("❌ Temperature too low")
+                issue_lines.append(f"Current Temperature: {_format_number(value)}°C")
+                recommendations.append("Consider planting later or using a greenhouse")
+                analysis_lines.append("• Temperature: Low")
+            else:
+                issue_lines.append("❌ Temperature too high")
+                issue_lines.append(f"Current Temperature: {_format_number(value)}°C")
+                recommendations.append("Use shade or heat-tolerant varieties")
+                analysis_lines.append("• Temperature: High")
+
+    if not issue_lines:
+        issue_lines.append("✅ All measured values are within the usual range for this crop")
+
+    return {
+        "suitable": suitable,
+        "analysis_lines": analysis_lines,
+        "issue_lines": issue_lines,
+        "recommendations": recommendations or ["No immediate correction is needed."],
+    }
 
 def suitability_check(desired_crop: str, soil_values):
     """Return suitability boolean and recommendations.
@@ -413,17 +566,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "🌾 Crop Rotation AI — Commands and usage:\n\n"
         "/start — Show this help text.\n\n"
+        "/status — Show a styled live crop recommendation report from the latest sensor reading.\n\n"
         "Give value of the soil to check if it suitable for the crop\n"
         "  Example:\n"
         "  With this order N,P,K,pH,Moisture,Temperature. 80,45,40,6.5,60,30 \n\n"
         "/testAllCrops CropName:N,P,K,pH,Moisture,Temperature; ... — Test multiple datasets at once.\n"
         "  Example:\n"
-        "  /testAllCrops Paddy:80,45,40,6.5,60,30; Maize:70,35,30,6.2,55,28\n\n"
+        "  /testAllCrops Chili:80,45,40,6.5,60,30; Eggplant:70,35,30,6.2,55,28\n\n"
     "/setSoilValue [label:]N,P,K,pH,Moisture,Temperature[; label2:... ] — Save one or more soil values for this chat.\n"
     "  Examples:\n"
     "    /setSoilValue 80,45,40,6.5,60,30\n"
     "    /setSoilValue plot1:80,45,40,6.5,60,30; plot2:70,35,30,6.2,55,28\n\n"
-    "/canPlant CropName [selector] — Check if a saved soil entry is suitable.\n"
+    "/canPlant CropName [selector] — Check if a saved soil entry is suitable for Chili or Eggplant.\n"
     "  Selector can be an index (1-based) or a label used when saving. If omitted, the latest saved soil is used.\n"
     "  Example: /canPlant Chili 2  or  /canPlant Chili plot1\n\n"
         "/getSoil — Show saved soil entries for this chat.\n"
@@ -556,22 +710,42 @@ async def can_plant(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chosen = entries[-1]
 
     soil_values = chosen.get("values")
-    res = suitability_check(crop_name, soil_values)
+    analysis = _analyze_against_crop(crop_name, soil_values)
+    plot_name = chosen.get("label") or f"Entry {chosen.get('id', len(entries))}"
 
-    if res.get("suitable"):
-        await update.message.reply_text(escape_md(f"Yes — your soil is suitable for {crop_name}! Predicted: {res.get('predicted')} ({res.get('top_prob'):.2f})"), parse_mode="MarkdownV2")
+    if analysis.get("suitable"):
+        msg_lines = [
+            "🌾 Crop Recommendation Report",
+            "",
+            f"📍 {plot_name}",
+            "🕒 Latest Sensor Reading",
+            "",
+            "🌱 Recommended Crop:",
+            crop_name,
+            "",
+            "______________",
+            "",
+            "Soil Analysis:",
+            *analysis.get("analysis_lines", []),
+            "",
+            "✅ This soil is suitable for {0} cultivation.".format(crop_name),
+        ]
+        await update.message.reply_text(escape_md("\n".join(msg_lines)), parse_mode="MarkdownV2")
         return
 
-    # Not suitable: provide alternatives and procedures
-    alt_text = ", ".join(res.get("alternatives", [])) or "None"
-    proc_text = "\n".join([f"- {p}" for p in res.get("procedures", [])])
-    msg = (
-        f"Your soil is not suitable for {crop_name}.\n"
-        f"Model predicted: {res.get('predicted')} ({res.get('top_prob'):.2f})\n"
-        f"Suggested alternative crops: {alt_text}\n\n"
-        f"Recommendations to make {crop_name} possible:\n{proc_text}"
-    )
-    await update.message.reply_text(escape_md(msg), parse_mode="MarkdownV2")
+    msg_lines = [
+        "⚠️ Soil Alert Detected",
+        "",
+        f"📍 {plot_name}",
+        "",
+        *analysis.get("issue_lines", []),
+        "",
+        "Recommendation:",
+        *[f"• {item}" for item in analysis.get("recommendations", [])],
+        "",
+        f"🌱 Current soil condition is NOT suitable for {crop_name}.",
+    ]
+    await update.message.reply_text(escape_md("\n".join(msg_lines)), parse_mode="MarkdownV2")
 
 
 async def get_soil(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -806,19 +980,53 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(escape_md(f"Could not fetch latest reading: {resp.status_code}"))
             return
         data = resp.json()
-        # Build message
-        ts = data.get("timestamp")
-        msg = (
-            f"📡 Latest reading (timestamp: {ts})\n"
-            f"N: {data.get('np_n')}\n"
-            f"P: {data.get('np_p')}\n"
-            f"K: {data.get('np_k')}\n"
-            f"EC: {data.get('ec')}\n"
-            f"pH: {data.get('ph')}\n"
-            f"Humidity: {data.get('humidity')}\n"
-            f"Temperature: {data.get('temperature')}\n"
-        )
-        await update.message.reply_text(escape_md(msg), parse_mode="MarkdownV2")
+        soil_values = _latest_reading_values(data)
+        plot_name = _reading_plot_name(data)
+        predicted_crop, probs = predict_crop(soil_values)
+        suitability = suitability_check(predicted_crop, soil_values)
+        analysis = _analyze_against_crop(predicted_crop, soil_values)
+        top_prob = float(np.max(probs)) if probs is not None else 0.0
+        reading_time = _format_reading_time(data.get("timestamp"))
+        result_line = f"{predicted_crop} ({top_prob * 100:.2f}%)"
+        sensor_line = _format_sensor_values(soil_values)
+
+        if suitability.get("suitable"):
+            msg_lines = [
+                "🌾 Crop Recommendation Report",
+                "",
+                f"📍 {plot_name}",
+                f"🕒 Time: {reading_time}",
+                f"📊 Result: {result_line}",
+                f"🧪 Sensor Values: {sensor_line}",
+                "",
+                "🌱 Recommended Crop:",
+                predicted_crop,
+                "",
+                "______________",
+                "",
+                "Soil Analysis:",
+                *analysis.get("analysis_lines", []),
+                "",
+                f"✅ This soil is suitable for {predicted_crop} cultivation.",
+            ]
+        else:
+            msg_lines = [
+                "⚠️ Soil Alert Detected",
+                "",
+                f"📍 {plot_name}",
+                f"🕒 Time: {reading_time}",
+                f"📊 Result: {result_line}",
+                f"🧪 Sensor Values: {sensor_line}",
+                "",
+                *analysis.get("issue_lines", []),
+                "",
+                "Recommendation:",
+                *[f"• {item}" for item in analysis.get("recommendations", [])],
+                "",
+                f"🌱 Current soil condition is NOT suitable for {predicted_crop}.",
+            ]
+
+        await update.message.reply_text(escape_md("\n".join(msg_lines)), parse_mode="MarkdownV2")
     except Exception as e:
         await update.message.reply_text(escape_md(f"Error retrieving status: {e}"))
 

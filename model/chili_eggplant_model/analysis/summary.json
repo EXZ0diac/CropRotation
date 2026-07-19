@@ -1,5 +1,16 @@
 {
-  "accuracy": 0.9505516416323275,
+  "accuracy": 0.9504187159377908,
+  "roc_auc": 0.9950624367352842,
+  "average_precision_micro": 0.9952005186520951,
+  "average_precision_macro": 0.9952095952742408,
+  "average_precision_per_class": {
+    "Chili": 0.9952148664694693,
+    "Eggplant": 0.9952043240790124
+  },
+  "best_f1_score": 0.9540736896730669,
+  "best_f1_threshold": 0.46,
+  "best_threshold_accuracy": 0.9529443041339891,
+  "best_threshold_accuracy_threshold": 0.46,
   "classes": [
     "Chili",
     "Eggplant"

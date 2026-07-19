@@ -16,6 +16,7 @@
 import os
 import json
 import random
+import argparse
 
 import joblib
 import matplotlib.pyplot as plt
@@ -23,7 +24,16 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import tensorflow as tf  # type: ignore
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    average_precision_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    roc_curve,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint  # type: ignore
@@ -39,17 +49,64 @@ SEED = 42
 DATA_PATH = "chili_eggplant_balanced_50150.csv"
 OUT_DIR = "model/chili_eggplant_model"
 ANALYSIS_DIR = os.path.join(OUT_DIR, "analysis")
+EPOCHS = 100
+# Choose which class to treat as the "positive" class for ROC/threshold sweeps
+POSITIVE_CLASS = "Chili"
+TUNE = False
 
 os.makedirs(OUT_DIR, exist_ok=True)
 os.makedirs(ANALYSIS_DIR, exist_ok=True)
+
+# ------------------------
+# CLI args
+# ------------------------
+parser = argparse.ArgumentParser(description="Train/evaluate Chili/Eggplant model")
+parser.add_argument("--data", default=DATA_PATH, help="path to CSV dataset")
+parser.add_argument("--epochs", type=int, default=EPOCHS, help="training epochs")
+parser.add_argument("--tune", action="store_true", help="use tuned architecture/settings")
+args = parser.parse_args()
+DATA_PATH = args.data
+EPOCHS = args.epochs
+TUNE = args.tune
 
 np.random.seed(SEED)
 random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# The dataset is already balanced and contains two classes.
-CLASSES = ["Chili", "Eggplant"]
+# Feature names for the CSV file (adjust if your CSV differs)
 FEATURE_NAMES = ["Nitrogen", "Phosphorus", "Potassium", "pH", "Humidity", "Temperature"]
+
+
+def build_model(input_dim: int, num_classes: int, tune: bool = False) -> Sequential:
+    """Builds and compiles the Keras model. When `tune=True` use a slightly different
+    architecture and learning rate aimed at improving PR curves for tougher datasets."""
+    if tune:
+        m = Sequential(
+            [
+                Dense(256, input_dim=input_dim, activation="relu"),
+                Dropout(0.25),
+                Dense(192, activation="relu"),
+                Dropout(0.20),
+                Dense(128, activation="relu"),
+                Dense(64, activation="relu"),
+                Dense(num_classes, activation="softmax"),
+            ]
+        )
+        opt = Adam(learning_rate=0.0006)
+    else:
+        m = Sequential(
+            [
+                Dense(128, input_dim=input_dim, activation="relu"),
+                Dropout(0.15),
+                Dense(128, activation="relu"),
+                Dense(64, activation="relu"),
+                Dense(num_classes, activation="softmax"),
+            ]
+        )
+        opt = Adam(learning_rate=0.0008)
+
+    m.compile(optimizer=opt, loss="categorical_crossentropy", metrics=["accuracy"])
+    return m
 
 # =====================================================
 # LOAD DATA
@@ -69,13 +126,8 @@ if missing:
 X = df[FEATURE_NAMES].copy().astype(float)
 y = df["Crop"].astype(str).str.strip().copy()
 
-# Normalize labels to expected casing.
+# Normalize labels to expected casing (adjust map for your dataset as needed).
 y = y.replace({"chili": "Chili", "eggplant": "Eggplant"})
-
-unknown_labels = sorted(set(y.unique()) - set(CLASSES))
-if unknown_labels:
-    raise RuntimeError(f"Unexpected crop labels in dataset: {unknown_labels}")
-
 print("Class counts:\n", y.value_counts().to_string())
 
 # Correlation matrix for the raw features.
@@ -136,28 +188,19 @@ y_test_oh = to_categorical(y_test, num_classes=len(encoder.classes_))
 # =====================================================
 # MODEL DEFINITION
 # =====================================================
-model = Sequential(
-    [
-        Dense(128, input_dim=X_train_scaled.shape[1], activation="relu"),
-        Dropout(0.15),
-        Dense(128, activation="relu"),
-        Dense(64, activation="relu"),
-        Dense(len(encoder.classes_), activation="softmax"),
-    ]
-)
-
-model.compile(
-    optimizer=Adam(learning_rate=0.0008),
-    loss="categorical_crossentropy",
-    metrics=["accuracy"],
-)
-
+model = build_model(X_train_scaled.shape[1], len(encoder.classes_), tune=TUNE)
 model.summary()
 
 checkpoint_path = os.path.join(OUT_DIR, "best_model.keras")
+early_stopping = EarlyStopping(
+    monitor="val_loss",
+    patience=10,
+    restore_best_weights=True,
+    verbose=1,
+)
 callbacks = [
-    EarlyStopping(monitor="val_accuracy", patience=12, restore_best_weights=True, verbose=1),
     ModelCheckpoint(checkpoint_path, monitor="val_accuracy", save_best_only=True, verbose=1),
+    early_stopping,
 ]
 
 # =====================================================
@@ -168,7 +211,7 @@ history = model.fit(
     X_train_scaled,
     y_train_oh,
     validation_data=(X_val_scaled, y_val_oh),
-    epochs=100,
+    epochs=EPOCHS,
     batch_size=64,
     callbacks=callbacks,
     verbose=1,
@@ -217,6 +260,181 @@ plt.tight_layout()
 plt.savefig(cm_png, dpi=150)
 plt.close()
 
+# ROC curve for the positive class to show threshold-independent performance.
+roc_png = os.path.join(ANALYSIS_DIR, "roc_curve.png")
+if len(encoder.classes_) >= 2:
+    try:
+        positive_class_index = int(list(encoder.classes_).index(POSITIVE_CLASS))
+    except ValueError:
+        positive_class_index = 0
+    y_true_binary = y_test_oh[:, positive_class_index]
+    fpr, tpr, _ = roc_curve(y_true_binary, probabilities[:, positive_class_index])
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure(figsize=(6, 5))
+    plt.plot(fpr, tpr, label=f"ROC curve (AUC = {roc_auc:.4f})")
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Chance")
+    plt.title("ROC Curve")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(roc_png, dpi=150)
+    plt.close()
+else:
+    roc_auc = None
+    roc_png = None
+
+# Precision-recall curve per class using one-vs-rest evaluation.
+pr_png = os.path.join(ANALYSIS_DIR, "precision_recall_curve.png")
+class_precision = {}
+class_recall = {}
+class_average_precision = {}
+
+n_classes = len(encoder.classes_)
+plt.figure(figsize=(7, 5))
+colors = sns.color_palette("tab10", n_colors=max(3, n_classes))
+for class_index, class_name in enumerate(encoder.classes_):
+    precision, recall, _ = precision_recall_curve(y_test_oh[:, class_index], probabilities[:, class_index])
+    average_precision = average_precision_score(y_test_oh[:, class_index], probabilities[:, class_index])
+    class_precision[class_name] = precision.tolist()
+    class_recall[class_name] = recall.tolist()
+    class_average_precision[class_name] = float(average_precision)
+    # plot per-class with distinct colors
+    plt.plot(recall, precision, label=f"{class_name} {average_precision:.3f}", color=colors[class_index % len(colors)], linewidth=1.6)
+
+# micro / all-classes curve (thicker emphasis like reference image)
+all_precision, all_recall, _ = precision_recall_curve(y_test_oh.ravel(), probabilities.ravel())
+micro_average_precision = float(average_precision_score(y_test_oh, probabilities, average="micro"))
+macro_average_precision = float(average_precision_score(y_test_oh, probabilities, average="macro"))
+mean_ap = macro_average_precision
+plt.plot(all_recall, all_precision, linewidth=3.5, color="#0b61a4", label=f"all classes {mean_ap:.3f} mAP")
+
+plt.title("Precision-Recall Curve")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.xlim(0, 1)
+plt.ylim(0, 1.02)
+plt.margins(x=0, y=0)
+# place legend to the right like the reference; use bbox_to_anchor
+plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0))
+plt.tight_layout()
+plt.savefig(pr_png, dpi=150, bbox_inches="tight")
+plt.close()
+
+# Precision-confidence curve per class.
+precision_confidence_png = os.path.join(ANALYSIS_DIR, "precision_confidence_curve.png")
+recall_confidence_png = os.path.join(ANALYSIS_DIR, "recall_confidence_curve.png")
+thresholds_pc = np.linspace(0.0, 1.0, 101)
+
+if len(encoder.classes_) == 2:
+    plt.figure(figsize=(8, 5))
+    for class_index, class_name in enumerate(encoder.classes_):
+        class_scores = probabilities[:, class_index]
+        precision_values = []
+        for threshold in thresholds_pc:
+            predicted_positive = (class_scores >= threshold).astype(int)
+            true_positive_mask = y_test_oh[:, class_index]
+            tp = int(np.sum((predicted_positive == 1) & (true_positive_mask == 1)))
+            fp = int(np.sum((predicted_positive == 1) & (true_positive_mask == 0)))
+            precision_values.append(tp / (tp + fp) if (tp + fp) else 1.0)
+        midpoint_index = int(np.argmin(np.abs(thresholds_pc - 0.5)))
+        plt.plot(thresholds_pc, precision_values, label=f"{class_name} (P@0.50={precision_values[midpoint_index]:.3f})")
+    plt.title("Precision-Confidence Curve")
+    plt.xlabel("Confidence")
+    plt.ylabel("Precision")
+    plt.xlim(0, 1)
+    plt.ylim(0, 1.02)
+    plt.margins(x=0, y=0)
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(precision_confidence_png, dpi=150)
+    plt.close()
+
+    plt.figure(figsize=(8, 5))
+    for class_index, class_name in enumerate(encoder.classes_):
+        class_scores = probabilities[:, class_index]
+        recall_values = []
+        for threshold in thresholds_pc:
+            predicted_positive = (class_scores >= threshold).astype(int)
+            true_positive_mask = y_test_oh[:, class_index]
+            tp = int(np.sum((predicted_positive == 1) & (true_positive_mask == 1)))
+            fn = int(np.sum((predicted_positive == 0) & (true_positive_mask == 1)))
+            recall_values.append(tp / (tp + fn) if (tp + fn) else 0.0)
+        midpoint_index = int(np.argmin(np.abs(thresholds_pc - 0.5)))
+        plt.plot(thresholds_pc, recall_values, label=f"{class_name} (R@0.50={recall_values[midpoint_index]:.3f})")
+    plt.title("Recall-Confidence Curve")
+    plt.xlabel("Confidence")
+    plt.ylabel("Recall")
+    plt.xlim(0, 1)
+    plt.ylim(0, 1.02)
+    plt.margins(x=0, y=0)
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(recall_confidence_png, dpi=150)
+    plt.close()
+else:
+    precision_confidence_png = None
+    recall_confidence_png = None
+
+# Threshold sweeps for F1-score and accuracy.
+try:
+    positive_class_index = int(list(encoder.classes_).index(POSITIVE_CLASS))
+except ValueError:
+    positive_class_index = 0
+score_column = probabilities[:, positive_class_index]
+thresholds = np.linspace(0.0, 1.0, 101)
+f1_scores = []
+threshold_accuracies = []
+
+# Use binary true labels for the selected positive class to compute thresholds correctly
+y_true_binary = y_test_oh[:, positive_class_index]
+for threshold in thresholds:
+    y_threshold_pred = (score_column >= threshold).astype(int)
+    f1_scores.append(f1_score(y_true_binary, y_threshold_pred))
+    threshold_accuracies.append(accuracy_score(y_true_binary, y_threshold_pred))
+
+metrics_df = pd.DataFrame(
+    {
+        "threshold": thresholds,
+        "f1_score": f1_scores,
+        "accuracy": threshold_accuracies,
+    }
+)
+metrics_csv = os.path.join(ANALYSIS_DIR, "threshold_metrics.csv")
+metrics_df.to_csv(metrics_csv, index=False)
+
+best_f1_index = int(np.argmax(f1_scores))
+best_accuracy_index = int(np.argmax(threshold_accuracies))
+best_f1_threshold = float(thresholds[best_f1_index])
+best_f1_value = float(f1_scores[best_f1_index])
+best_accuracy_threshold = float(thresholds[best_accuracy_index])
+best_accuracy_value = float(threshold_accuracies[best_accuracy_index])
+
+plt.figure(figsize=(8, 5))
+plt.plot(thresholds, f1_scores, label="F1-score", color="#1f77b4")
+plt.axvline(best_f1_threshold, linestyle="--", color="#1f77b4", alpha=0.5)
+plt.title("F1-Score vs Confidence Threshold")
+plt.xlabel("Confidence")
+plt.ylabel("F1-score")
+plt.ylim(0, 1.02)
+plt.legend()
+plt.tight_layout()
+plt.savefig(os.path.join(ANALYSIS_DIR, "f1_score_curve.png"), dpi=150)
+plt.close()
+
+plt.figure(figsize=(8, 5))
+plt.plot(thresholds, threshold_accuracies, label="Accuracy", color="#d62728")
+plt.axvline(best_accuracy_threshold, linestyle="--", color="#d62728", alpha=0.5)
+plt.title("Accuracy vs Confidence Threshold")
+plt.xlabel("Confidence")
+plt.ylabel("Accuracy")
+plt.ylim(0, 1.02)
+plt.legend()
+plt.tight_layout()
+plt.savefig(os.path.join(ANALYSIS_DIR, "accuracy_curve.png"), dpi=150)
+plt.close()
+
 report = classification_report(y_true, y_pred, target_names=list(encoder.classes_), output_dict=True)
 report_df = pd.DataFrame(report).transpose()
 report_csv = os.path.join(ANALYSIS_DIR, "classification_report.csv")
@@ -224,6 +442,14 @@ report_df.to_csv(report_csv)
 
 summary = {
     "accuracy": float(acc),
+    "roc_auc": None if roc_auc is None else float(roc_auc),
+    "average_precision_micro": None if micro_average_precision is None else float(micro_average_precision),
+    "average_precision_macro": None if macro_average_precision is None else float(macro_average_precision),
+    "average_precision_per_class": class_average_precision,
+    "best_f1_score": best_f1_value,
+    "best_f1_threshold": best_f1_threshold,
+    "best_threshold_accuracy": best_accuracy_value,
+    "best_threshold_accuracy_threshold": best_accuracy_threshold,
     "classes": list(encoder.classes_),
     "n_train": int(len(X_train_scaled)),
     "n_val": int(len(X_val_scaled)),
@@ -298,10 +524,23 @@ report_lines = [
     f"- Test samples: `{len(X_test_scaled)}`",
     f"- Classes: `{', '.join(list(encoder.classes_))}`",
     f"- Test accuracy: `{acc:.4f}`",
+    f"- ROC AUC: `{roc_auc:.4f}`" if roc_auc is not None else "- ROC AUC: not available",
+    f"- Average precision (micro): `{micro_average_precision:.4f}`" if micro_average_precision is not None else "- Average precision (micro): not available",
+    f"- Average precision (macro): `{macro_average_precision:.4f}`" if macro_average_precision is not None else "- Average precision (macro): not available",
+    f"- Best F1-score: `{best_f1_value:.4f}` at threshold `{best_f1_threshold:.2f}`",
+    f"- Best threshold accuracy: `{best_accuracy_value:.4f}` at threshold `{best_accuracy_threshold:.2f}`",
     "",
     "## Evaluation Artifacts",
     f"- Confusion matrix CSV: `{cm_csv}`",
     f"- Confusion matrix image: `{cm_png}`",
+    f"- ROC curve image: `{roc_png}`" if roc_png else "- ROC curve image: not generated for non-binary classification",
+    f"- Precision-recall curve image: `{pr_png}`" if pr_png else "- Precision-recall curve image: not generated for non-binary classification",
+    f"- Precision-confidence curve image: `{precision_confidence_png}`" if precision_confidence_png else "- Precision-confidence curve image: not generated for non-binary classification",
+    f"- Recall-confidence curve image: `{recall_confidence_png}`" if recall_confidence_png else "- Recall-confidence curve image: not generated for non-binary classification",
+    f"- Average precision per class: `{class_average_precision}`" if class_average_precision else "- Average precision per class: not available",
+    f"- F1-score curve image: `{os.path.join(ANALYSIS_DIR, 'f1_score_curve.png')}`",
+    f"- Accuracy curve image: `{os.path.join(ANALYSIS_DIR, 'accuracy_curve.png')}`",
+    f"- Threshold metrics CSV: `{metrics_csv}`",
     f"- Correlation matrix CSV: `{corr_csv}`",
     f"- Correlation matrix image: `{corr_png}`",
     f"- Accuracy/Loss plot: `{os.path.join(ANALYSIS_DIR, 'accuracy_loss.png')}`",

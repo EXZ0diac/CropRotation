@@ -545,6 +545,7 @@ class CropTestRequest(BaseModel):
 
 class PlantUpdateRequest(BaseModel):
     plant_name: str
+    field_name: str = None  # Optional field name
 
 
 def _analyze_crop_suitability(crop_name: str, soil_values: list):
@@ -859,7 +860,7 @@ def get_plants(db: Session = Depends(get_db), _=Depends(require_api_key)):
     # For now, we'll maintain a single record (id=1)
     plant_entry = db.query(models.PlantHistory).first()
     if not plant_entry:
-        plant_entry = models.PlantHistory(previous_plant=None, next_plant=None)
+        plant_entry = models.PlantHistory(previous_plant=None, previous_field=None, next_plant=None, next_field=None)
         db.add(plant_entry)
         db.commit()
         db.refresh(plant_entry)
@@ -867,7 +868,9 @@ def get_plants(db: Session = Depends(get_db), _=Depends(require_api_key)):
     return {
         "id": plant_entry.id,
         "previous_plant": plant_entry.previous_plant,
+        "previous_field": plant_entry.previous_field,
         "next_plant": plant_entry.next_plant,
+        "next_field": plant_entry.next_field,
         "updated_at": plant_entry.updated_at,
     }
 
@@ -877,16 +880,18 @@ def set_previous_plant(payload: PlantUpdateRequest, db: Session = Depends(get_db
     """Set or update the previous plant."""
     plant_entry = db.query(models.PlantHistory).first()
     if not plant_entry:
-        plant_entry = models.PlantHistory(previous_plant=payload.plant_name, next_plant=None)
+        plant_entry = models.PlantHistory(previous_plant=payload.plant_name, previous_field=payload.field_name, next_plant=None, next_field=None)
         db.add(plant_entry)
     else:
         plant_entry.previous_plant = payload.plant_name
+        plant_entry.previous_field = payload.field_name
     
     db.commit()
     db.refresh(plant_entry)
     return {
         "status": "set",
         "previous_plant": plant_entry.previous_plant,
+        "previous_field": plant_entry.previous_field,
     }
 
 
@@ -897,20 +902,24 @@ def set_next_plant(payload: PlantUpdateRequest, db: Session = Depends(get_db), _
     
     if not plant_entry:
         # No history yet, just set next_plant
-        plant_entry = models.PlantHistory(previous_plant=None, next_plant=payload.plant_name)
+        plant_entry = models.PlantHistory(previous_plant=None, previous_field=None, next_plant=payload.plant_name, next_field=payload.field_name)
         db.add(plant_entry)
     else:
         # Move current next_plant to previous_plant, then set new next_plant
         if plant_entry.next_plant:
             plant_entry.previous_plant = plant_entry.next_plant
+            plant_entry.previous_field = plant_entry.next_field
         plant_entry.next_plant = payload.plant_name
+        plant_entry.next_field = payload.field_name
     
     db.commit()
     db.refresh(plant_entry)
     return {
         "status": "set",
         "previous_plant": plant_entry.previous_plant,
+        "previous_field": plant_entry.previous_field,
         "next_plant": plant_entry.next_plant,
+        "next_field": plant_entry.next_field,
     }
 
 

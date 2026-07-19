@@ -40,5 +40,7 @@ class PlantHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     previous_plant = Column(String, nullable=True)
+    previous_field = Column(String, nullable=True)
     next_plant = Column(String, nullable=True)
+    next_field = Column(String, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -549,13 +549,15 @@ async function loadPlantHistory() {
     let html = '<h4>Current Plant History</h4>';
     
     if (result.previous_plant) {
-      html += `<div class="plant-info"><h4>Previous Plant</h4><p>${escapeHtml(result.previous_plant)}</p></div>`;
+      const fieldDisplay = result.previous_field ? ` <span style="color: #666; font-size: 12px;">(${escapeHtml(result.previous_field)})</span>` : '';
+      html += `<div class="plant-info"><h4>Previous Plant</h4><p>${escapeHtml(result.previous_plant)}${fieldDisplay}</p></div>`;
     } else {
       html += `<div class="plant-info"><h4>Previous Plant</h4><p style="color: #999;">Not set</p></div>`;
     }
     
     if (result.next_plant) {
-      html += `<div class="plant-info"><h4>Next Plant</h4><p>${escapeHtml(result.next_plant)}</p></div>`;
+      const fieldDisplay = result.next_field ? ` <span style="color: #666; font-size: 12px;">(${escapeHtml(result.next_field)})</span>` : '';
+      html += `<div class="plant-info"><h4>Next Plant</h4><p>${escapeHtml(result.next_plant)}${fieldDisplay}</p></div>`;
     } else {
       html += `<div class="plant-info"><h4>Next Plant</h4><p style="color: #999;">Not set</p></div>`;
     }
@@ -568,14 +570,25 @@ async function loadPlantHistory() {
 
 async function setNextPlant() {
   const plant = document.getElementById('next-plant').value.trim();
+  const field = document.getElementById('next-plant-field').value.trim();
+  
   if (!plant) {
     showStatus('Please select a crop', true);
     return;
   }
   
+  if (!field) {
+    showStatus('Please select a field', true);
+    return;
+  }
+  
   try {
-    await apiCall('/commands/plants/next', 'POST', { plant_name: plant });
-    showStatus(`✅ Next plant set to: ${plant}`);
+    await apiCall('/commands/plants/next', 'POST', { 
+      plant_name: plant,
+      field_name: field
+    });
+    
+    showStatus(`✅ Next plant set to: ${plant} in ${field}`);
     
     // Display preparation information
     displayPlantPreparation(plant);
@@ -583,6 +596,7 @@ async function setNextPlant() {
     // Reload plant history
     loadPlantHistory();
     document.getElementById('next-plant').value = '';
+    document.getElementById('next-plant-field').value = '';
   } catch (error) {
     showStatus(error.message, true);
   }
